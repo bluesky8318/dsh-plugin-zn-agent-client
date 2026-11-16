@@ -52,9 +52,11 @@ export const Config: Schema<any> = Schema.object({
       // （TS2883）；用 any + interface 约束代替。
       env: Schema.any(),
       workingDirectory: Schema.string().default(''),
+      // apiKey 的内部字段不能 .required()：agent 未配置 apiKey 时 schemastery
+      // 仍会用空对象走一遍校验，required 会把整行配置判非法。
       apiKey: Schema.object({
-        secretId: Schema.string().required(),
-        envVarName: Schema.string().required(),
+        secretId: Schema.string(),
+        envVarName: Schema.string(),
       }),
     }),
   ).default([]).volatile(),
