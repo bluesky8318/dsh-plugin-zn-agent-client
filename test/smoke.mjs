@@ -25,7 +25,7 @@ const ctx = {
       return () => {}
     },
   },
-  // 可选服务的组合点：本插件用它挂 /acp 命令。
+  // 可选服务的组合点：本插件用它挂 /znacp 命令。
   inject(services, fn) {
     if (services.includes('commands')) {
       fn({
@@ -79,7 +79,7 @@ assert.ok(registeredTools.some(t => t.name === 'list_acp_sessions'), 'list_acp_s
 assert.equal(registeredProviders.length, 1, 'one subagent provider should be registered')
 assert.equal(registeredProviders[0].name, 'acp')
 assert.equal(typeof registeredProviders[0].start, 'function')
-assert.ok(registeredCommands.some(c => c.name === 'acp'), '/acp command should be registered')
+assert.ok(registeredCommands.some(c => c.name === 'znacp'), '/znacp command should be registered')
 assert.ok(emitted.some(e => e.event === 'zn-agent-client/ready'), 'ready event should be emitted')
 
 // list_acp_agents 直接执行即可（不 spawn 进程）。

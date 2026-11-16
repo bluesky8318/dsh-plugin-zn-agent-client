@@ -54,7 +54,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'field.agent.secretId': 'Secret ID (optional)',
   'field.agent.envVarName': 'Env var name (optional)',
   'field.defaultAgent.label': 'Default agent ID',
-  'field.defaultAgent.hint': 'Used when no agentId is given (call_acp_agent, /acp, subagent provider).',
+  'field.defaultAgent.hint': 'Used when no agentId is given (call_acp_agent, /znacp, subagent provider).',
   'field.autoAllow.label': 'Auto-allow permissions',
   'field.autoAllow.hint': 'Automatically approve the agent\u2019s tool-permission requests.',
   'field.logEvents.label': 'Diagnostic logging',
@@ -62,8 +62,8 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.title': 'ACP agents',
   'launcher.close': 'Close',
   'launcher.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
-  'launcher.hint': 'Paste the copied snippet into any DSH session, or just run /acp to list agents. Session history lives on the agent side; list_acp_sessions shows reusable handles.',
-  'launcher.copy': 'Copy /acp snippet',
+  'launcher.hint': 'Paste the copied snippet into any DSH session, or just run /znacp to list agents. Session history lives on the agent side; list_acp_sessions shows reusable handles.',
+  'launcher.copy': 'Copy /znacp snippet',
   'launcher.copied': 'Copied',
 }
 
@@ -95,7 +95,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'field.agent.secretId': 'Secret ID(可选)',
   'field.agent.envVarName': '环境变量名(可选)',
   'field.defaultAgent.label': '默认 agent ID',
-  'field.defaultAgent.hint': '未指定 agentId 时使用(call_acp_agent、/acp、子代理提供方)。',
+  'field.defaultAgent.hint': '未指定 agentId 时使用(call_acp_agent、/znacp、子代理提供方)。',
   'field.autoAllow.label': '自动允许权限请求',
   'field.autoAllow.hint': '自动批准 agent 的工具权限请求,不再逐条确认。',
   'field.logEvents.label': '诊断日志',
@@ -103,7 +103,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.title': 'ACP 智能体',
   'launcher.close': '关闭',
   'launcher.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
-  'launcher.hint': '把复制好的片段粘到任意 DSH 会话,或直接输入 /acp 查看清单。会话历史保存在 agent 侧;list_acp_sessions 可查可续聊的句柄。',
-  'launcher.copy': '复制 /acp 片段',
+  'launcher.hint': '把复制好的片段粘到任意 DSH 会话,或直接输入 /znacp 查看清单。会话历史保存在 agent 侧;list_acp_sessions 可查可续聊的句柄。',
+  'launcher.copy': '复制 /znacp 片段',
   'launcher.copied': '已复制',
 }

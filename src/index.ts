@@ -38,8 +38,8 @@ export interface Config {
   logEvents: Volatile<boolean>
 }
 
-/** /acp 斜杠命令名。 */
-export const ACP_COMMAND_NAME = 'acp'
+/** /znacp 斜杠命令名（/acp 被其他插件占用）。 */
+export const ACP_COMMAND_NAME = 'znacp'
 
 // Schema<any> 注解：嵌套在 Schema.array 里的 Schema.object 会把 cosmokit 的
 // Dict 混进推断类型（TS2883 不可移植），而 Schema<Config> 精确注解又与
@@ -369,8 +369,8 @@ export function apply(ctx: Context, config: Config): void {
   })
   ctx.effect(() => offUpdate, `${name}: agent-update relay`)
 
-  // /acp 斜杠命令：键盘直达通道。命令处理器与本插件闭包共享同一个 manager,
-  // 所以 `/acp <agentId> <prompt>` 不经模型决策直接驱动 ACP 会话。
+  // /znacp 斜杠命令：键盘直达通道。命令处理器与本插件闭包共享同一个 manager,
+  // 所以 `/znacp <agentId> <prompt>` 不经模型决策直接驱动 ACP 会话。
   // 命令服务是可选组合:宿主没组 dsh-commands 时静默跳过。
   ctx.inject(['commands'], (commandCtx) => {
     interface AcpCommandInvocation {
@@ -390,7 +390,7 @@ export function apply(ctx: Context, config: Config): void {
     }
     ;(commandCtx as Context & { commands: CommandsLike }).commands.register({
       name: ACP_COMMAND_NAME,
-      description: 'ACP 智能体：/acp 列出清单；/acp <agentId> <prompt> 直接调用。',
+      description: 'ACP 智能体：/znacp 列出清单；/znacp <agentId> <prompt> 直接调用。',
       handler: async ({ rawInput }): Promise<AcpCommandResult> => {
         const input = rawInput.trim()
         const agents = config.agents.get()
@@ -399,7 +399,7 @@ export function apply(ctx: Context, config: Config): void {
             return { kind: 'success', text: '尚未配置任何 ACP agent。请到 设置 → 插件 里添加,或在 cordis.patch.yml 的本插件 config.agents 里配置。' }
           }
           const lines = agents.map((agent) => `- ${agent.id} (${agent.displayName}) — ${agent.command} ${agent.args.join(' ')}`.trimEnd())
-          return { kind: 'success', text: `已配置的 ACP agent:\n${lines.join('\n')}\n\n用法: /acp <agentId> <prompt>` }
+          return { kind: 'success', text: `已配置的 ACP agent:\n${lines.join('\n')}\n\n用法: /znacp <agentId> <prompt>` }
         }
         // 第一个 token 若命中清单里的 id 就用它,否则整段作为 prompt 交给默认 agent。
         const [first, ...rest] = input.split(/\s+/)
@@ -407,10 +407,10 @@ export function apply(ctx: Context, config: Config): void {
         const agent = candidate ?? resolveAgentConfig()
         const prompt = candidate ? rest.join(' ') : input
         if (!agent) {
-          return { kind: 'error', text: `找不到 ACP agent "${first ?? ''}"。用 /acp 查看清单。` }
+          return { kind: 'error', text: `找不到 ACP agent "${first ?? ''}"。用 /znacp 查看清单。` }
         }
         if (prompt === '') {
-          return { kind: 'error', text: `用法: /acp ${agent.id} <prompt>` }
+          return { kind: 'error', text: `用法: /znacp ${agent.id} <prompt>` }
         }
         try {
           const outcome = await runAgentTurn(agent, prompt)

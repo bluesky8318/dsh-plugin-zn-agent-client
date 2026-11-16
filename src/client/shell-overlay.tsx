@@ -9,7 +9,7 @@
  * 共同的父组件，跨插槽通信用宿主文档级事件最直白。
  *
  * 浮层内容：已配置 agent 的卡片清单（来自配置表单模型快照），每张卡片带
- * "复制 /acp 用法" 按钮。真正的对话在宿主会话里由 /acp 命令或 call_acp_agent
+ * "复制 /znacp 用法" 按钮。真正的对话在宿主会话里由 /znacp 命令或 call_acp_agent
  * 工具驱动 —— DSH 目前的客户端面没有"插件客户端→宿主工具"通道，浮层内嵌
  * 聊天需要那样的桥，先不做（README 里有说明）。
  * @module dsh-plugin-zn-agent-client/client/agent-launcher
@@ -97,7 +97,7 @@ export function AgentLauncherOverlay(props: LauncherProps): React.ReactElement |
 
   const copyUsage = async (agentId: string): Promise<void> => {
     try {
-      await navigator.clipboard.writeText(`/acp ${agentId} `)
+      await navigator.clipboard.writeText(`/znacp ${agentId} `)
       setCopiedId(agentId)
       window.setTimeout(() => { setCopiedId(current => (current === agentId ? null : current)) }, 1500)
     } catch {

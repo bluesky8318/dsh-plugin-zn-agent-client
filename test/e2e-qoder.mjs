@@ -11,7 +11,7 @@ const providers = []
 const ctx = {
   tools: { register(d) { registeredTools.push(d); return () => {} } },
   subagents: { registerProvider(p) { providers.push(p); return () => {} } },
-  inject() {}, // commands 服务未组合，/acp 命令注册会被跳过
+  inject() {}, // commands 服务未组合，/znacp 命令注册会被跳过
   on() { return () => {} },
   effect() { return () => {} },
   emit(event, payload) { console.log(`[event] ${event}`, JSON.stringify(payload)) },
