@@ -136,20 +136,67 @@ export function apply(ctx: Context, config: Config): void {
    */
   const sessionIndex = new SessionIndex()
 
+  /** 短 id:会话句柄前 8 位,用于人类可读的展示与命令行引用。 */
+  const shortId = (sessionId: string): string => sessionId.slice(0, 8)
+
+  /** 相对时间:把 ISO 时间戳变成"3 分钟前"式表述。 */
+  const relativeTime = (iso: string): string => {
+    const diffMs = Date.now() - new Date(iso).getTime()
+    if (!Number.isFinite(diffMs) || diffMs < 0) return iso
+    const minutes = Math.floor(diffMs / 60000)
+    if (minutes < 1) return '刚刚'
+    if (minutes < 60) return `${minutes} 分钟前`
+    const hours = Math.floor(minutes / 60)
+    if (hours < 24) return `${hours} 小时前`
+    const days = Math.floor(hours / 24)
+    if (days < 30) return `${days} 天前`
+    return new Date(iso).toLocaleString()
+  }
+
+  /** 会话清单的人类可读格式(工具与 /znacp sessions 共用)。 */
+  const formatSessionLines = (records: ReadonlyArray<{ sessionId: string; agentId: string; cwd: string; lastUsedAt: string }>): string =>
+    records
+      .map((record, index) => `${index + 1}. [${record.agentId}] ${shortId(record.sessionId)}… · ${record.cwd} · ${relativeTime(record.lastUsedAt)}`)
+      .join('\n')
+
   /**
-   * 所有通道(工具/命令/子代理)共用的"一轮 prompt":确保初始化 → 发送 →
-   * 把会话句柄写进索引(写失败不打断主流程)。
+   * 解析用户给的会话引用:完整 id / 唯一前缀 / 'latest'(该 agent 最近一次会话)。
+   * 解析不出唯一匹配时原样返回,让 agent 侧给出更有针对性的报错。
+   */
+  const resolveSessionRef = async (agentId: string, raw: string): Promise<string> => {
+    if (raw === 'latest') return (await sessionIndex.latestFor(agentId))?.sessionId ?? raw
+    const records = await sessionIndex.list()
+    if (records.some(record => record.sessionId === raw)) return raw
+    const matches = records.filter(record => record.sessionId.startsWith(raw))
+    return matches.length === 1 ? matches[0]!.sessionId : raw
+  }
+
+  /**
+   * 所有通道(工具/命令/子代理)共用的"一轮 prompt":确保初始化 → 决定会话 →
+   * 发送 → 把会话句柄写进索引(写失败不打断主流程)。
+   *
+   * 会话选择规则:显式 sessionId 优先;否则默认**自动延续**该 agent 最近一次
+   * 会话(agent 声明了 loadSession 能力时),让跨重启的"接着聊"成为默认体验;
+   * `resume: false` 强制开全新会话。
    */
   const runAgentTurn = async (
     agent: AgentConfig,
     prompt: string | readonly ContentBlock[],
-    options: { sessionId?: string } = {},
+    options: { sessionId?: string; resume?: boolean } = {},
   ): Promise<PromptOutcome> => {
     await manager.ensureInitialized(agent)
+    let effective = options.sessionId
+    if (effective === undefined && options.resume !== false) {
+      const latest = (await sessionIndex.latestFor(agent.id))?.sessionId
+      if (latest !== undefined && manager.canResumeSessions()) effective = latest
+    }
+    if (options.resume === false && effective === undefined) {
+      await manager.newSession()
+    }
     const content: readonly ContentBlock[] = typeof prompt === 'string'
       ? [{ type: 'text', text: prompt } as ContentBlock]
       : prompt
-    const outcome = await manager.sendPrompt(content, options)
+    const outcome = await manager.sendPrompt(content, effective !== undefined ? { sessionId: effective } : {})
     void sessionIndex
       .record({ sessionId: outcome.sessionId, agentId: agent.id, cwd: agent.workingDirectory || process.cwd() })
       .catch(() => undefined)
@@ -202,11 +249,12 @@ export function apply(ctx: Context, config: Config): void {
   ctx.tools.register(
     defineTool({
       name: 'call_acp_agent',
-      description: 'Send a prompt to a locally configured ACP agent over stdio and return its reply. Use list_acp_agents first to discover agent ids.',
+      description: 'Send a prompt to a locally configured ACP agent over stdio and return its reply. By default the conversation automatically continues from this agent\'s most recent session; pass newSession to start fresh. Use list_acp_agents first to discover agent ids.',
       parameters: {
         agentId: { type: 'string', required: true, description: 'Agent id from list_acp_agents.' },
         prompt: { type: 'string', required: true, description: 'Prompt text to send to the agent.' },
-        sessionId: { type: 'string', description: 'Existing ACP session id to continue; omit to start a new session.' },
+        sessionId: { type: 'string', description: 'Session to continue: full id, unique id prefix, or "latest" (this agent\'s most recent session). Omit to auto-continue the latest session.' },
+        newSession: { type: 'boolean', description: 'Force a brand-new session instead of continuing the latest one.' },
       },
       output: {
         schema: {
@@ -215,18 +263,19 @@ export function apply(ctx: Context, config: Config): void {
             response: { type: 'string', required: true },
             agentId: { type: 'string' },
             sessionId: { type: 'string' },
+            resumed: { type: 'boolean' },
             stopReason: { type: 'string' },
             usage: { type: 'json' },
           },
           additionalProperties: false,
         },
         render: (_args, value) => {
-          const parts: string[] = []
-          if (value.agentId) parts.push(value.agentId)
-          if (value.sessionId) parts.push(value.sessionId)
-          if (value.stopReason) parts.push(value.stopReason)
-          const suffix = parts.length > 0 ? `\n\n(${parts.join(' · ')})` : ''
-          return [{ type: 'text', text: `${value.response}${suffix}` }]
+          const tags: string[] = []
+          if (value.agentId) tags.push(value.agentId)
+          if (value.sessionId) tags.push(`${value.resumed ? '延续会话' : '新会话'} ${shortId(String(value.sessionId))}…`)
+          if (value.stopReason) tags.push(String(value.stopReason))
+          const suffix = tags.length > 0 ? `\n\n（${tags.join(' · ')}）` : ''
+          return [{ type: 'text', text: `${String(value.response ?? '')}${suffix}` }]
         },
       },
       async execute(args, exec) {
@@ -243,15 +292,28 @@ export function apply(ctx: Context, config: Config): void {
         else exec.signal.addEventListener('abort', onAbort, { once: true })
 
         try {
+          // 决定本轮挂在哪个会话上(仅用于结果标注 resumed):
+          // 显式引用 > 自动延续最近会话 > 全新会话(newSession)。
+          const autoTarget = args.newSession === true || args.sessionId !== undefined
+            ? undefined
+            : (await sessionIndex.latestFor(agent.id))?.sessionId
+          const requested = args.newSession === true
+            ? undefined
+            : args.sessionId
+              ? await resolveSessionRef(agent.id, args.sessionId)
+              : undefined
           const outcome = await runAgentTurn(
             agent,
             [{ type: 'text', text: args.prompt }],
-            args.sessionId ? { sessionId: args.sessionId } : {},
+            requested !== undefined
+              ? { sessionId: requested }
+              : { ...(args.newSession === true ? { resume: false } : {}) },
           )
           return {
             response: outcome.agentText,
             agentId: agent.id,
             sessionId: outcome.sessionId,
+            resumed: requested !== undefined || autoTarget !== undefined,
             ...(outcome.stopReason !== undefined ? { stopReason: outcome.stopReason } : {}),
             ...(outcome.usage !== null ? { usage: outcome.usage } : {}),
           }
@@ -293,11 +355,12 @@ export function apply(ctx: Context, config: Config): void {
         },
         render: (_args, value) => {
           const sessions = value?.sessions ?? []
-          if (sessions.length === 0) return [{ type: 'text', text: 'No recorded ACP sessions yet. Sessions appear here after call_acp_agent runs.' }]
-          const lines = sessions.map(session =>
-            `- ${session.agentId} · ${session.sessionId} · ${session.cwd} · ${session.lastUsedAt}`,
-          )
-          return [{ type: 'text', text: `Recorded ACP sessions (newest first):\n${lines.join('\n')}` }]
+          if (sessions.length === 0) return [{ type: 'text', text: '还没有记录过会话。调用一次 call_acp_agent 之后这里就会出现历史。' }]
+          const lines = formatSessionLines(sessions)
+          return [{
+            type: 'text',
+            text: `记录到的会话（新 → 旧）：\n${lines}\n\n续聊方式：call_acp_agent 传 sessionId（完整 id、上表前缀或 "latest"）；平时不带 sessionId 会自动延续该 agent 最近一次会话。`,
+          }]
         },
       },
       async execute(args) {
@@ -326,7 +389,8 @@ export function apply(ctx: Context, config: Config): void {
         }
       }
       try {
-        const outcome = await runAgentTurn(agent, request.prompt)
+        // 子代理委派语义上是独立任务:强制全新会话,不续聊主对话。
+        const outcome = await runAgentTurn(agent, request.prompt, { resume: false })
         return {
           output: [{ type: 'text', text: outcome.agentText }],
           stopReason: mapStopReason(outcome.stopReason),
@@ -390,31 +454,74 @@ export function apply(ctx: Context, config: Config): void {
     }
     ;(commandCtx as Context & { commands: CommandsLike }).commands.register({
       name: ACP_COMMAND_NAME,
-      description: 'ACP 智能体：/znacp 列出清单；/znacp <agentId> <prompt> 直接调用。',
+      description: 'ACP 智能体：/znacp 看用法；/znacp <agentId> <消息> 直接对话（自动延续上次会话）。',
       handler: async ({ rawInput }): Promise<AcpCommandResult> => {
         const input = rawInput.trim()
         const agents = config.agents.get()
+        const usageBlock = [
+          '用法：',
+          `  /${ACP_COMMAND_NAME}                          查看本清单`,
+          `  /${ACP_COMMAND_NAME} <agentId> <消息>         和该 agent 对话（自动延续它最近的会话）`,
+          `  /${ACP_COMMAND_NAME} new <agentId> <消息>     强制开一个全新会话`,
+          `  /${ACP_COMMAND_NAME} sessions                 查看历史会话（可续聊）`,
+        ].join('\n')
         if (input === '') {
           if (agents.length === 0) {
-            return { kind: 'success', text: '尚未配置任何 ACP agent。请到 设置 → 插件 里添加,或在 cordis.patch.yml 的本插件 config.agents 里配置。' }
+            return { kind: 'success', text: `还没有配置 ACP agent。到 设置 → 插件 → 本插件 里添加,或在 cordis.patch.yml 的 config.agents 里配置。\n\n${usageBlock}` }
           }
-          const lines = agents.map((agent) => `- ${agent.id} (${agent.displayName}) — ${agent.command} ${agent.args.join(' ')}`.trimEnd())
-          return { kind: 'success', text: `已配置的 ACP agent:\n${lines.join('\n')}\n\n用法: /znacp <agentId> <prompt>` }
+          const defaultId = config.defaultAgent.get()
+          const lines = agents.map((agent, index) => {
+            const star = agent.id === defaultId ? '★' : `${index + 1}.`
+            return `${star} ${agent.id} — ${agent.displayName}（${`${agent.command} ${agent.args.join(' ')}`.trimEnd()}）`
+          })
+          return {
+            kind: 'success',
+            text: `已配置 ${agents.length} 个 ACP agent（★ 为默认）：\n${lines.join('\n')}\n\n${usageBlock}`,
+          }
         }
-        // 第一个 token 若命中清单里的 id 就用它,否则整段作为 prompt 交给默认 agent。
+
+        // ---- 子命令:sessions / new ----
+        if (input === 'sessions' || input.startsWith('sessions ')) {
+          const records = await sessionIndex.list()
+          if (records.length === 0) {
+            return { kind: 'success', text: `还没有会话历史。用 /${ACP_COMMAND_NAME} <agentId> <消息> 对话一次,这里就会出现记录。` }
+          }
+          return {
+            kind: 'success',
+            text: `历史会话（新 → 旧）：\n${formatSessionLines(records)}\n\n续聊：/${ACP_COMMAND_NAME} <会话ID前缀> <消息>；不指定时默认自动延续该 agent 最近一次会话。`,
+          }
+        }
         const [first, ...rest] = input.split(/\s+/)
-        const candidate = agents.find(agent => agent.id === first)
-        const agent = candidate ?? resolveAgentConfig()
-        const prompt = candidate ? rest.join(' ') : input
+        const wantsFresh = first === 'new'
+        const tokens = wantsFresh ? rest : [first, ...rest]
+        const head = tokens[0] ?? ''
+        const tail = tokens.slice(1).join(' ')
+
+        // 第一个 token 依次尝试:agent id → 会话 id 前缀 → 都不命中则整段交给默认 agent。
+        const agentMatch = agents.find(agent => agent.id === head)
+        const sessionMatch = agentMatch ? undefined : (await sessionIndex.list()).find(record => record.sessionId.startsWith(head))
+        const agent = agentMatch ?? resolveAgentConfig()
+        const prompt = agentMatch || sessionMatch ? tail : input
         if (!agent) {
-          return { kind: 'error', text: `找不到 ACP agent "${first ?? ''}"。用 /znacp 查看清单。` }
+          return { kind: 'error', text: `找不到 ACP agent "${head}"。用 /${ACP_COMMAND_NAME} 查看清单。` }
         }
         if (prompt === '') {
-          return { kind: 'error', text: `用法: /znacp ${agent.id} <prompt>` }
+          return { kind: 'error', text: `缺少消息内容。用法: /${ACP_COMMAND_NAME} ${agentMatch ? agent.id : '<agentId>'} <消息>` }
         }
         try {
-          const outcome = await runAgentTurn(agent, prompt)
-          const footer = `\n\n(${agent.id} · ${outcome.sessionId})`
+          // 标注"延续/新会话":显式会话或自动延续都算延续;其余是新会话。
+          const autoTarget = sessionMatch || wantsFresh
+            ? undefined
+            : (await sessionIndex.latestFor(agent.id))?.sessionId
+          const outcome = await runAgentTurn(
+            agent,
+            prompt,
+            sessionMatch
+              ? { sessionId: sessionMatch.sessionId }
+              : { ...(wantsFresh ? { resume: false } : {}) },
+          )
+          const mode = sessionMatch !== undefined || outcome.sessionId === autoTarget ? '延续会话' : '新会话'
+          const footer = `\n\n（${agent.id} · ${mode} ${shortId(outcome.sessionId)}… · 想开新会话说 /${ACP_COMMAND_NAME} new ${agent.id} <消息>）`
           return { kind: 'success', text: `${outcome.agentText}${footer}` }
         } catch (error) {
           return { kind: 'error', text: `ACP 调用失败: ${error instanceof Error ? error.message : String(error)}` }

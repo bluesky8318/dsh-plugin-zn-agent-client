@@ -67,6 +67,12 @@ export class SessionIndex {
     return filtered.sort((a, b) => (a.lastUsedAt < b.lastUsedAt ? 1 : -1))
   }
 
+  /** 某个 agent 最近一次使用的会话记录(没有则 null)。自动续聊的默认目标。 */
+  async latestFor(agentId: string): Promise<AcpSessionRecord | null> {
+    const [latest] = await this.list(agentId)
+    return latest ?? null
+  }
+
   /**
    * 记录(或 touch)一次会话使用:同一 sessionId 是 upsert,更新 cwd 与
    * lastUsedAt;新会话插入头部。超出上限时淘汰最旧的记录。

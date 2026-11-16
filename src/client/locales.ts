@@ -62,7 +62,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.title': 'ACP agents',
   'launcher.close': 'Close',
   'launcher.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
-  'launcher.hint': 'Paste the copied snippet into any DSH session, or just run /znacp to list agents. Session history lives on the agent side; list_acp_sessions shows reusable handles.',
+  'launcher.hint': 'Paste a snippet into any DSH session. Calls auto-continue the agent\'s latest session; prefix with new for a fresh one (/znacp new qoder hi). Run /znacp sessions to browse history.',
   'launcher.copy': 'Copy /znacp snippet',
   'launcher.copied': 'Copied',
 }
@@ -103,7 +103,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.title': 'ACP 智能体',
   'launcher.close': '关闭',
   'launcher.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
-  'launcher.hint': '把复制好的片段粘到任意 DSH 会话,或直接输入 /znacp 查看清单。会话历史保存在 agent 侧;list_acp_sessions 可查可续聊的句柄。',
+  'launcher.hint': '把片段粘到任意 DSH 会话即可。对话会自动延续该 agent 最近的会话;想开新会话加 new 前缀(/znacp new qoder 你好)。输入 /znacp sessions 可查历史会话。',
   'launcher.copy': '复制 /znacp 片段',
   'launcher.copied': '已复制',
 }
