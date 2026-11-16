@@ -13,3 +13,6 @@ export const NAMESPACE = 'dsh-plugin-zn-agent-client'
 
 /** 客户端半边自己的 locale 字典命名空间。 */
 export const LOCALE_NAMESPACE = 'settings.znAgentClient'
+
+/** /znacp 命令名（复制到输入框的命令以此开头）。 */
+export const ACP_COMMAND_BASE = '/znacp'

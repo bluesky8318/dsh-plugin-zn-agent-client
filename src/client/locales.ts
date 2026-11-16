@@ -27,6 +27,10 @@ export type ZnAgentClientLocaleKey =
   | 'launcher.copy' | 'launcher.copied'
   | 'launcher.terminal' | 'launcher.terminalOpening' | 'launcher.terminalOpened'
   | 'launcher.terminalNoSession' | 'launcher.terminalFailed'
+  // 侧栏底栏按钮组
+  | 'footer.launch' | 'footer.more'
+  // 主会话区 CLI Agent 视图
+  | 'view.label' | 'view.empty' | 'view.noService' | 'view.launching'
 
 /** 英文文案。 */
 export const en: Record<ZnAgentClientLocaleKey, string> = {
@@ -72,6 +76,12 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.terminalOpened': 'Opened in the terminal tab on the right.',
   'launcher.terminalNoSession': 'Open a session first — the terminal runs in that project.',
   'launcher.terminalFailed': 'Could not open the terminal.',
+  'footer.launch': 'Launch',
+  'footer.more': 'All agents',
+  'view.label': 'CLI Agent',
+  'view.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
+  'view.noService': 'This deployment has no embedded-terminal service; use the /znacp command instead.',
+  'view.launching': 'Starting the CLI…',
 }
 
 /** 中文文案。 */
@@ -118,4 +128,10 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.terminalOpened': '已在右侧终端页签打开。',
   'launcher.terminalNoSession': '请先打开一个会话——终端会跑在当前项目目录。',
   'launcher.terminalFailed': '终端打开失败。',
+  'footer.launch': '启动',
+  'footer.more': '全部 agent',
+  'view.label': 'CLI Agent',
+  'view.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
+  'view.noService': '当前部署没有内嵌终端服务；请改用 /znacp 命令。',
+  'view.launching': '正在启动 CLI…',
 }

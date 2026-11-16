@@ -67,24 +67,38 @@ const CSS = `
 .znac-dot[data-on='true'] { background: var(--dsw-alias-state-success-primary); }
 
 /* ---- 帧级浮层（shell.overlay）----
-   抬升面：border: 0 + elevation-panel。 */
+   根元素铺满屏幕作遮罩，卡片抬升：border: 0 + elevation-panel。 */
 .znac-overlay {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  inset: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
+  background: var(--dsw-alias-bg-base);
+  opacity: 0.96;
+}
+.znac-launcher {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
   box-sizing: border-box;
-  max-width: min(320px, calc(100vw - 32px));
-  padding: 10px 12px;
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 64px));
+  padding: 14px 16px;
   border: 0;
-  border-radius: var(--dsw-radius-md);
+  border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
   font-size: 13px;
   line-height: 20px;
   box-shadow: var(--dsw-elevation-panel);
+  overflow: auto;
+}
+.znac-overlay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 .znac-overlay-text {
   flex: 1;
@@ -115,25 +129,7 @@ const CSS = `
   color: var(--dsw-alias-label-secondary);
 }
 
-/* ---- agent picker 浮层 ---- */
-.znac-launcher {
-  align-items: flex-end;
-  max-width: min(420px, calc(100vw - 32px));
-  padding: 0;
-}
-.znac-launcher-body {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 100%;
-  padding: 12px 14px;
-}
-.znac-launcher-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
+/* ---- agent picker 卡片内容 ---- */
 .znac-launcher-title {
   font-weight: 500;
   font-size: 13px;
@@ -147,14 +143,15 @@ const CSS = `
   padding: 0;
   list-style: none;
 }
-.znac-launcher-item {
+.znac-launcher-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
   border-radius: var(--dsw-radius-md);
 }
-.znac-launcher-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-launcher-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .znac-launcher-meta {
   display: flex;
   flex-direction: column;
@@ -356,6 +353,126 @@ const CSS = `
   border-color: transparent;
   background: var(--dsw-alias-state-business-primary);
   color: var(--dsw-alias-label-primary);
+}
+
+/* ---- 侧栏底栏：主启动钮 + "..." 钮 ---- */
+.znac-foot-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  corner-shape: round;
+  background: var(--dsw-alias-label-tertiary);
+}
+.znac-foot-dot[data-on='true'] { background: var(--dsw-alias-state-success-primary); }
+.znac-foot-failed { color: var(--dsw-alias-state-error-primary); }
+.znac-foot-dots {
+  flex: none;
+  width: 36px;
+  justify-content: center;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 14px;
+  line-height: 22px;
+  letter-spacing: 2px;
+}
+
+/* ---- 主会话区 CLI Agent 视图 ---- */
+.znac-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  height: 100%;
+  min-height: 0;
+  padding: 8px;
+  box-sizing: border-box;
+}
+.znac-view-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+.znac-view-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.znac-view-chip {
+  padding: 3px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.znac-view-chip:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-view-chip[data-active='true'] {
+  background: var(--dsw-alias-state-business-primary);
+  border-color: transparent;
+  color: var(--dsw-alias-label-primary);
+}
+.znac-view-term {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-base);
+}
+
+/* xterm.js 的必要骨架规则（内联自 @xterm/xterm 的 xterm.css——bundle 不加载
+   外部 css 文件），配色交给容器上的主题 token。 */
+.znac-term-screen {
+  position: relative;
+  height: 100%;
+  min-height: 0;
+  padding: 6px;
+  box-sizing: border-box;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+  cursor: text;
+  user-select: none;
+}
+.znac-term-screen .xterm { position: relative; height: 100%; }
+.znac-term-screen .xterm-helpers { position: absolute; top: 0; z-index: 5; }
+.znac-term-screen .xterm-helper-textarea {
+  position: absolute;
+  opacity: 0;
+  left: -9999em;
+  top: 0;
+  width: 0;
+  height: 0;
+  z-index: -5;
+  white-space: nowrap;
+  overflow: hidden;
+  resize: none;
+}
+.znac-term-screen .composition-view {
+  position: absolute;
+  z-index: 1;
+  display: none;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+}
+.znac-term-screen .composition-view.active { display: block; }
+.znac-term-screen .xterm-viewport {
+  position: absolute;
+  inset: 0;
+  overflow-y: scroll;
+  cursor: default;
+  background-color: var(--dsw-alias-bg-base);
+}
+.znac-term-screen .xterm-screen { position: relative; }
+.znac-term-screen .xterm-screen canvas { position: absolute; left: 0; top: 0; }
+.znac-term-screen .xterm-char-measure-element {
+  position: absolute;
+  top: 0;
+  left: -9999em;
+  line-height: normal;
+  visibility: hidden;
 }
 `
 

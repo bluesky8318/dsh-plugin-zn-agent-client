@@ -1,52 +1,118 @@
 /**
- * 侧栏底部动作：`sidebar.footer.action`，打开 ACP agent picker 浮层的入口。
+ * 侧边栏底栏按钮组：主按钮一键开默认 agent 的 TUI，"..." 打开选择浮层。
  *
- * root 级 list 插槽，一个条目一个按钮。owner 会传 `wide`：展开态为 true，
- * 收起态（rail）为 false，此时只剩图标——所以收起态必须另给一个无障碍名称。
- * 按钮与浮层没有共同父组件，打开经 document CustomEvent（见 shell-overlay.tsx）。
+ * 参照 dsh-better-sidebar「新建终端」的动线——默认目标可在设置里配
+ * （defaultAgent），省掉"浮层→挑 agent→终端"三跳。
  * @module dsh-plugin-zn-agent-client/client/sidebar-action
  */
 
-import type {} from '@deepseek-ai/dsh-client-locale/client'
-import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
-import type { Context } from '@deepseek-ai/cordis'
 import React from 'react'
-import { LOCALE_NAMESPACE, NAMESPACE } from './constants.ts'
-import { OPEN_LAUNCHER_EVENT } from './shell-overlay.tsx'
-
-/** 注册项的 props：owner 的 wide 状态加本插件的 `t` 席位。 */
-type SidebarActionProps =
-  & { readonly wide: boolean }
-  & PropsLocale<typeof LOCALE_NAMESPACE>
+import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
+import type { Context } from '@deepseek-ai/cordis'
+import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
+import { OPEN_LAUNCHER_EVENT, readAgents, launchAgentEntry } from './shell-overlay.tsx'
+import type { TemplateFace, AgentEntry } from './shell-overlay.tsx'
 
 /**
- * 注册 `sidebar.footer.action` 的 ACP 智能体入口按钮。
- * @param ctx - 客户端根上下文。
+ * 注册侧边栏底栏按钮：主按钮（默认 agent 直启）+ "..."（浮层）。
+ * @param ctx - 客户端上下文。
+ * @param controller - 配置表单控制器（读 defaultAgent）。
  */
-export function registerSidebarAction(ctx: Context): void {
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register(
-    { name: 'sidebar.footer.action', id: NAMESPACE, order: 30, locale: LOCALE_NAMESPACE },
-    SidebarAction,
-  ))
+export function registerSidebarAction(ctx: Context, controller: ConfigFormController): void {
+  ctx.slots.inject('sidebar.footer.action', () => [
+    ctx.slots.register({
+      name: 'sidebar.footer.action',
+      id: 'znacp-sidebar-launch',
+      order: 30,
+      locale: 'settings.znAgentClient',
+      inject: () => controller.inject(),
+    }, (props) => <SidebarLaunchButton {...props} pluginCtx={ctx} />),
+    ctx.slots.register({
+      name: 'sidebar.footer.action',
+      id: 'znacp-sidebar-more',
+      order: 31,
+      locale: 'settings.znAgentClient',
+    }, (props) => <SidebarMoreButton {...props} />),
+  ])
 }
 
+type FooterProps = PropsRuntime<'sidebar.footer.action'> &
+  PropsLocale<'settings.znAgentClient'> &
+  InjectFace<TemplateFace> & { readonly pluginCtx: Context }
+
 /**
- * 侧栏底部按钮：展开态 42px 整宽行，收起态 36x36 居中方钮；
- * 收起时按钮仍要有无障碍名称。点击派发打开浮层的文档事件。
+ * 主按钮：取 defaultAgent（缺省取第一个 agent），点击即开 TUI。
  */
-export function SidebarAction(props: SidebarActionProps): React.ReactElement {
-  const { t } = props
+export function SidebarLaunchButton(props: FooterProps): React.ReactElement {
+  const { t, wide, pluginCtx, useTemplateConfig } = props
+  const [busy, setBusy] = React.useState(false)
+  const [failed, setFailed] = React.useState(false)
+
+  // 注入面的 hooks 舱位以 use<Name> 选择器钩子到达（见 InjectFace 契约）。
+  const { agents, defaultId } = useTemplateConfig((state: ConfigSnapshot) => ({
+    agents: readAgents(state.value),
+    defaultId: typeof state.value?.defaultAgent === 'string' ? state.value.defaultAgent : '',
+  }))
+  const target = agents.find((agent: AgentEntry) => agent.id === defaultId) ?? agents[0]
+  const label = target === undefined ? t('footer.launch') : `${t('footer.launch')} ${target.displayName}`
+
+  const onClick = (): void => {
+    if (target === undefined || busy) return
+    setBusy(true)
+    setFailed(false)
+    void launchAgentEntry(pluginCtx, target)
+      .catch(() => { setFailed(true) })
+      .finally(() => { setBusy(false) })
+  }
+
+  if (wide) {
+    return (
+      <button
+        type="button"
+        className={`znac-foot znac-foot-launch${failed ? ' znac-foot-failed' : ''}`}
+        onClick={onClick}
+        disabled={target === undefined || busy}
+        aria-label={label}
+        title={failed ? t('launcher.terminalFailed') : label}
+      >
+        <span className="znac-foot-dot" data-on={!busy} aria-hidden="true" />
+        <span className="znac-foot-label">{label}</span>
+      </button>
+    )
+  }
   return (
     <button
       type="button"
-      className={props.wide ? 'znac-foot' : 'znac-foot znac-foot-rail'}
-      aria-label={t('sidebar.label')}
-      onClick={() => { document.dispatchEvent(new CustomEvent(OPEN_LAUNCHER_EVENT)) }}
+      className={`znac-foot-rail${failed ? ' znac-foot-failed' : ''}`}
+      onClick={onClick}
+      disabled={target === undefined || busy}
+      aria-label={label}
+      title={label}
     >
-      <span className="znac-dot" data-on="true" />
-      {props.wide && <span className="znac-foot-label">{t('sidebar.label')}</span>}
+      <span className="znac-foot-dot" data-on={!busy} aria-hidden="true" />
+    </button>
+  )
+}
+
+/**
+ * "..." 按钮：广播 OPEN_LAUNCHER_EVENT 打开 agent 选择浮层。
+ */
+export function SidebarMoreButton(props: PropsRuntime<'sidebar.footer.action'> & PropsLocale<'settings.znAgentClient'>): React.ReactElement {
+  const { t, wide } = props
+  const label = t('footer.more')
+  const onClick = (): void => {
+    document.dispatchEvent(new CustomEvent(OPEN_LAUNCHER_EVENT))
+  }
+  if (wide) {
+    return (
+      <button type="button" className="znac-foot znac-foot-dots" onClick={onClick} aria-label={label} title={label}>
+        <span className="znac-foot-label">···</span>
+      </button>
+    )
+  }
+  return (
+    <button type="button" className="znac-foot-rail znac-foot-dots" onClick={onClick} aria-label={label} title={label}>
+      ···
     </button>
   )
 }

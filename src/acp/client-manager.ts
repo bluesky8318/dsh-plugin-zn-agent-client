@@ -78,6 +78,8 @@ export class AcpClientManager {
   private currentConfig: AgentConfig | null = null
   private isInitializedFlag = false
   private currentSessionId: string | null = null
+  /** 本连接上已打开的会话(agent 侧一个会话只允许一个进程持有)。 */
+  private readonly openSessions = new Set<string>()
   /** agent 是否声明了 loadSession 能力(可续聊既有会话)。 */
   private supportsLoadSession = false
   private recentStderr = ''
@@ -165,6 +167,7 @@ export class AcpClientManager {
       this.connection = null
       this.agentProcess = null
       this.currentSessionId = null
+      this.openSessions.clear()
       const suffix = code === 127 ? ' — command not found; check the configured command path' : ''
       this.log(`agent "${config.id}" exited (code=${String(code)} signal=${String(signal)})${suffix}`)
     })
@@ -287,6 +290,7 @@ export class AcpClientManager {
     const dir = cwd || this.currentConfig?.workingDirectory || process.cwd()
     const response = await connection.agent.request('session/new', { cwd: dir, mcpServers: [] })
     this.currentSessionId = response.sessionId
+    this.openSessions.add(response.sessionId)
     return toSessionResult(response.sessionId, response)
   }
 
@@ -294,15 +298,23 @@ export class AcpClientManager {
    * Resume an existing agent-side session (`session/load`). Only possible when
    * the agent advertised the loadSession capability at initialize time; ACP
    * session history lives on the agent side, so this re-attaches a handle.
+   * Agent side allows ONE process per session: loading a session this very
+   * connection already has open fails with "already open", so those short-
+   * circuit here (the handle is live and promptable).
    * @returns true when the session was loaded onto this connection.
    */
   async loadSession(sessionId: string, cwd?: string): Promise<boolean> {
     if (!this.supportsLoadSession) return false
+    if (this.openSessions.has(sessionId)) {
+      this.currentSessionId = sessionId
+      return true
+    }
     const connection = this.requireConnection()
     const dir = cwd || this.currentConfig?.workingDirectory || process.cwd()
     try {
       await connection.agent.request('session/load', { sessionId, cwd: dir, mcpServers: [] })
       this.currentSessionId = sessionId
+      this.openSessions.add(sessionId)
       return true
     } catch (err) {
       this.log(`session/load ${sessionId} failed: ${err instanceof Error ? err.message : String(err)}`)
@@ -393,6 +405,7 @@ export class AcpClientManager {
     this.currentConfig = null
     this.isInitializedFlag = false
     this.currentSessionId = null
+    this.openSessions.clear()
     this.supportsLoadSession = false
     this.recentStderr = ''
   }

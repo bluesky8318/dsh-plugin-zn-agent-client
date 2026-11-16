@@ -163,8 +163,8 @@ export function apply(ctx: Context, config: Config): void {
    * 解析用户给的会话引用:完整 id / 唯一前缀 / 'latest'(该 agent 最近一次会话)。
    * 解析不出唯一匹配时原样返回,让 agent 侧给出更有针对性的报错。
    */
-  const resolveSessionRef = async (agentId: string, raw: string): Promise<string> => {
-    if (raw === 'latest') return (await sessionIndex.latestFor(agentId))?.sessionId ?? raw
+  const resolveSessionRef = async (agentId: string, cwd: string, raw: string): Promise<string> => {
+    if (raw === 'latest') return (await sessionIndex.latestFor(agentId, cwd))?.sessionId ?? raw
     const records = await sessionIndex.list()
     if (records.some(record => record.sessionId === raw)) return raw
     const matches = records.filter(record => record.sessionId.startsWith(raw))
@@ -182,13 +182,15 @@ export function apply(ctx: Context, config: Config): void {
   const runAgentTurn = async (
     agent: AgentConfig,
     prompt: string | readonly ContentBlock[],
-    options: { sessionId?: string; resume?: boolean } = {},
+    options: { sessionId?: string; resume?: boolean; track?: boolean } = {},
   ): Promise<PromptOutcome> => {
     await manager.ensureInitialized(agent)
     let effective = options.sessionId
     if (effective === undefined && options.resume !== false) {
-      const latest = (await sessionIndex.latestFor(agent.id))?.sessionId
-      if (latest !== undefined && manager.canResumeSessions()) effective = latest
+      // 只延续同工作目录的会话：agent 侧(qoder/claude 等)按项目存放会话,
+      // 跨目录 resume 会被对方拒掉,反而打断"新项目新会话"的预期。
+      const latest = await sessionIndex.latestFor(agent.id, agent.workingDirectory)
+      if (latest !== null && manager.canResumeSessions()) effective = latest.sessionId
     }
     if (options.resume === false && effective === undefined) {
       await manager.newSession()
@@ -197,9 +199,11 @@ export function apply(ctx: Context, config: Config): void {
       ? [{ type: 'text', text: prompt } as ContentBlock]
       : prompt
     const outcome = await manager.sendPrompt(content, effective !== undefined ? { sessionId: effective } : {})
-    void sessionIndex
-      .record({ sessionId: outcome.sessionId, agentId: agent.id, cwd: agent.workingDirectory || process.cwd() })
-      .catch(() => undefined)
+    if (options.track !== false) {
+      void sessionIndex
+        .record({ sessionId: outcome.sessionId, agentId: agent.id, cwd: agent.workingDirectory || process.cwd() })
+        .catch(() => undefined)
+    }
     return outcome
   }
 
@@ -296,11 +300,11 @@ export function apply(ctx: Context, config: Config): void {
           // 显式引用 > 自动延续最近会话 > 全新会话(newSession)。
           const autoTarget = args.newSession === true || args.sessionId !== undefined
             ? undefined
-            : (await sessionIndex.latestFor(agent.id))?.sessionId
+            : (await sessionIndex.latestFor(agent.id, agent.workingDirectory))?.sessionId
           const requested = args.newSession === true
             ? undefined
             : args.sessionId
-              ? await resolveSessionRef(agent.id, args.sessionId)
+              ? await resolveSessionRef(agent.id, agent.workingDirectory, args.sessionId)
               : undefined
           const outcome = await runAgentTurn(
             agent,
@@ -390,7 +394,7 @@ export function apply(ctx: Context, config: Config): void {
       }
       try {
         // 子代理委派语义上是独立任务:强制全新会话,不续聊主对话。
-        const outcome = await runAgentTurn(agent, request.prompt, { resume: false })
+        const outcome = await runAgentTurn(agent, request.prompt, { resume: false, track: false })
         return {
           output: [{ type: 'text', text: outcome.agentText }],
           stopReason: mapStopReason(outcome.stopReason),
@@ -516,7 +520,7 @@ export function apply(ctx: Context, config: Config): void {
           // 标注"延续/新会话":显式会话或自动延续都算延续;其余是新会话。
           const autoTarget = sessionMatch || wantsFresh
             ? undefined
-            : (await sessionIndex.latestFor(agent.id))?.sessionId
+            : (await sessionIndex.latestFor(agent.id, agent.workingDirectory))?.sessionId
           const outcome = await runAgentTurn(
             agent,
             prompt,

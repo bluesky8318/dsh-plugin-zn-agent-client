@@ -10,9 +10,15 @@
  */
 
 // 类型引入：拉进各宿主包的 Context 与插槽表声明合并。
+// chat / sidebar / conversation 三个包的 contract 各自向 SlotMap 合并自家槽位名
+// （shell.overlay、sidebar.footer.action、conversation.view），必须显式引入，
+// 否则类型表里没有这些键，register/inject 的调用点过不了编译。
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
+import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import { createConfigForm } from './config-form.ts'
@@ -21,6 +27,7 @@ import { LOCALE_NAMESPACE } from './constants.ts'
 import { en, zh, type ZnAgentClientLocaleKey } from './locales.ts'
 import { registerShellOverlay } from './shell-overlay.tsx'
 import { registerSidebarAction } from './sidebar-action.tsx'
+import { registerConversationView } from './conversation-view.tsx'
 import { injectStyles } from './styles.ts'
 
 /** 声明本插件的 locale 字典命名空间，让 `PropsLocale` 给出带类型的 `t`。 */
@@ -56,5 +63,6 @@ export function apply(ctx: Context): void {
 
   registerConfigCard(ctx, controller)
   registerShellOverlay(ctx, controller)
-  registerSidebarAction(ctx)
+  registerSidebarAction(ctx, controller)
+  registerConversationView(ctx, controller)
 }

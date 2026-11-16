@@ -68,9 +68,12 @@ export class SessionIndex {
   }
 
   /** 某个 agent 最近一次使用的会话记录(没有则 null)。自动续聊的默认目标。 */
-  async latestFor(agentId: string): Promise<AcpSessionRecord | null> {
-    const [latest] = await this.list(agentId)
-    return latest ?? null
+  async latestFor(agentId: string, cwd?: string): Promise<AcpSessionRecord | null> {
+    const latest = (await this.list(agentId))[0]
+    // cwd 过滤:agent 侧按项目存放会话,跨目录的句柄 resume 会被拒。
+    if (latest === undefined) return null
+    if (cwd !== undefined && latest.cwd !== cwd) return null
+    return latest
   }
 
   /**

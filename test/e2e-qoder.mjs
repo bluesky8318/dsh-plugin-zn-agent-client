@@ -4,16 +4,23 @@
 // 前置：qodercli 已安装并登录（`qodercli login`）；ACP 入口是隐藏 flag `--acp`。
 // 断言：call_acp_agent 返回 agent 文本 `PONG`。
 import assert from 'node:assert/strict'
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { apply } from '../lib/index.js'
+
+// 独立工作目录：保证 E2E 不吃到历史会话（auto-resume 按 cwd 过滤）。
+const e2eCwd = mkdtempSync(join(tmpdir(), 'znacp-e2e-'))
 
 const registeredTools = []
 const providers = []
+const cleanups = []
 const ctx = {
   tools: { register(d) { registeredTools.push(d); return () => {} } },
   subagents: { registerProvider(p) { providers.push(p); return () => {} } },
   inject() {}, // commands 服务未组合，/znacp 命令注册会被跳过
   on() { return () => {} },
-  effect() { return () => {} },
+  effect(fn) { cleanups.push(fn()) },
   emit(event, payload) { console.log(`[event] ${event}`, JSON.stringify(payload)) },
 }
 
@@ -26,7 +33,7 @@ const config = {
         command: 'qodercli',
         args: ['--acp'],
         env: {},
-        workingDirectory: '/tmp/acpprobe',
+        workingDirectory: e2eCwd,
       },
     ],
   },
@@ -62,7 +69,7 @@ assert.ok(result.sessionId, 'session id should be present')
 
 // 3) 子代理提供方同一条链路
 const run = await providers[0].start({
-  cwd: '/tmp/acpprobe',
+  cwd: e2eCwd,
   prompt: [{ type: 'text', text: 'Reply with exactly: PONG' }],
   parent: {},
   signal: controller.signal,
@@ -96,6 +103,9 @@ assert.ok(sessions.sessions.some(s => s.sessionId === remember.sessionId), 'sess
 
 // 6) 真正的 resume：全新插件实例（新 agent 进程），拿旧 sessionId 续聊。
 //    新进程内存里没有会话，能答出 codeword 只可能走 session/load。
+//    先撤掉实例 1：agent 侧一个会话只允许一个进程持有（already open），
+//    必须让实例 1 杀掉自己的 qodercli 进程后实例 2 才能收养。
+for (const dispose of cleanups.reverse()) await dispose()
 const tools2 = []
 const ctx2 = {
   tools: { register(d) { tools2.push(d); return () => {} } },
