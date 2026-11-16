@@ -176,6 +176,28 @@ const CSS = `
   line-height: 16px;
   color: var(--dsw-alias-label-tertiary);
 }
+.znac-launcher-status {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-secondary);
+}
+.znac-launcher-actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+.znac-launcher-open {
+  flex: none;
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.znac-launcher-open:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .znac-launcher-copy {
   flex: none;
   padding: 4px 10px;

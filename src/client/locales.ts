@@ -25,6 +25,8 @@ export type ZnAgentClientLocaleKey =
   // agent picker 浮层
   | 'launcher.title' | 'launcher.close' | 'launcher.empty' | 'launcher.hint'
   | 'launcher.copy' | 'launcher.copied'
+  | 'launcher.terminal' | 'launcher.terminalOpening' | 'launcher.terminalOpened'
+  | 'launcher.terminalNoSession' | 'launcher.terminalFailed'
 
 /** 英文文案。 */
 export const en: Record<ZnAgentClientLocaleKey, string> = {
@@ -65,6 +67,11 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.hint': 'Paste a snippet into any DSH session. Calls auto-continue the agent\'s latest session; prefix with new for a fresh one (/znacp new qoder hi). Run /znacp sessions to browse history.',
   'launcher.copy': 'Copy /znacp snippet',
   'launcher.copied': 'Copied',
+  'launcher.terminal': 'Terminal',
+  'launcher.terminalOpening': 'Opening terminal…',
+  'launcher.terminalOpened': 'Opened in the terminal tab on the right.',
+  'launcher.terminalNoSession': 'Open a session first — the terminal runs in that project.',
+  'launcher.terminalFailed': 'Could not open the terminal.',
 }
 
 /** 中文文案。 */
@@ -106,4 +113,9 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.hint': '把片段粘到任意 DSH 会话即可。对话会自动延续该 agent 最近的会话;想开新会话加 new 前缀(/znacp new qoder 你好)。输入 /znacp sessions 可查历史会话。',
   'launcher.copy': '复制 /znacp 片段',
   'launcher.copied': '已复制',
+  'launcher.terminal': '终端',
+  'launcher.terminalOpening': '正在打开终端…',
+  'launcher.terminalOpened': '已在右侧终端页签打开。',
+  'launcher.terminalNoSession': '请先打开一个会话——终端会跑在当前项目目录。',
+  'launcher.terminalFailed': '终端打开失败。',
 }
