@@ -114,6 +114,227 @@ const CSS = `
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-secondary);
 }
+
+/* ---- agent picker 浮层 ---- */
+.znac-launcher {
+  align-items: flex-end;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 0;
+}
+.znac-launcher-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 14px;
+}
+.znac-launcher-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.znac-launcher-title {
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 20px;
+}
+.znac-launcher-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.znac-launcher-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--dsw-radius-md);
+}
+.znac-launcher-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-launcher-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.znac-launcher-name {
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-primary);
+}
+.znac-launcher-cmd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.znac-launcher-copy {
+  flex: none;
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.znac-launcher-copy:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-launcher-empty {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+.znac-launcher-hint {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+/* ---- Plugins 页配置表单 ---- */
+.znac-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.znac-form-title {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+.znac-summary {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+.znac-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.znac-invalid {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-state-error-primary);
+}
+.znac-field { display: flex; flex-direction: column; gap: 6px; }
+.znac-field-inline {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+}
+.znac-field-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-primary);
+}
+.znac-field-hint {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+.znac-badge {
+  font-style: normal;
+  font-size: 12px;
+  line-height: 16px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-tertiary);
+}
+.znac-form input[type='text'],
+.znac-form input[type='number'] {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 20px;
+}
+.znac-agent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+}
+.znac-agent-title {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  padding: 0 4px;
+}
+.znac-agent-grid {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 6px 10px;
+  align-items: center;
+}
+.znac-sublabel {
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+.znac-agent-remove,
+.znac-agent-add {
+  align-self: flex-start;
+  padding: 4px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.znac-agent-remove:hover,
+.znac-agent-add:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.znac-form-actions button {
+  padding: 5px 14px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.znac-form-actions button:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-form-actions button[type='submit'] {
+  border-color: transparent;
+  background: var(--dsw-alias-state-business-primary);
+  color: var(--dsw-alias-label-primary);
+}
 `
 
 /** 注入本插件的样式节点；返回清理函数，插件停用时移除样式。 */

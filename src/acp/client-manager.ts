@@ -78,6 +78,8 @@ export class AcpClientManager {
   private currentConfig: AgentConfig | null = null
   private isInitializedFlag = false
   private currentSessionId: string | null = null
+  /** agent 是否声明了 loadSession 能力(可续聊既有会话)。 */
+  private supportsLoadSession = false
   private recentStderr = ''
   private updateListeners = new Set<(update: SessionUpdate) => void>()
   private promptBuffers: { text: string; updateCount: number } | null = null
@@ -268,6 +270,7 @@ export class AcpClientManager {
       clientInfo: { name: CLIENT_NAME, title: 'Zn Agent Client', version: CLIENT_VERSION },
     })
     this.isInitializedFlag = true
+    this.supportsLoadSession = init.agentCapabilities?.loadSession === true
     const summary = toInitializeSummary(init)
     this.log(
       `initialized agent "${config.id}" (protocol v${String(summary.protocolVersion)}` +
@@ -288,6 +291,31 @@ export class AcpClientManager {
   }
 
   /**
+   * Resume an existing agent-side session (`session/load`). Only possible when
+   * the agent advertised the loadSession capability at initialize time; ACP
+   * session history lives on the agent side, so this re-attaches a handle.
+   * @returns true when the session was loaded onto this connection.
+   */
+  async loadSession(sessionId: string, cwd?: string): Promise<boolean> {
+    if (!this.supportsLoadSession) return false
+    const connection = this.requireConnection()
+    const dir = cwd || this.currentConfig?.workingDirectory || process.cwd()
+    try {
+      await connection.agent.request('session/load', { sessionId, cwd: dir, mcpServers: [] })
+      this.currentSessionId = sessionId
+      return true
+    } catch (err) {
+      this.log(`session/load ${sessionId} failed: ${err instanceof Error ? err.message : String(err)}`)
+      return false
+    }
+  }
+
+  /** Whether the running agent supports session resume. */
+  canResumeSessions(): boolean {
+    return this.supportsLoadSession
+  }
+
+  /**
    * Send one prompt turn and wait for the stop reason.
    * Agent text is collected from `agent_message_chunk` notifications.
    */
@@ -296,6 +324,18 @@ export class AcpClientManager {
     let sessionId = options.sessionId ?? this.currentSessionId
     if (!sessionId) {
       sessionId = (await this.newSession()).sessionId
+    }
+    // 显式给了不同的 sessionId:这是要续聊 agent 侧的既有会话。agent 没声明
+    // loadSession 能力时明确报错,而不是让 session/prompt 吃一个未知 id。
+    if (options.sessionId && options.sessionId !== this.currentSessionId) {
+      const loaded = await this.loadSession(options.sessionId)
+      if (!loaded) {
+        throw new Error(
+          this.supportsLoadSession
+            ? `Failed to resume session ${options.sessionId}; it may not exist on the agent side for this working directory.`
+            : `Session ${options.sessionId} cannot be resumed because the agent does not support session resume (loadSession capability false). Start a new session instead.`,
+        )
+      }
     }
 
     this.promptBuffers = { text: '', updateCount: 0 }
@@ -353,6 +393,7 @@ export class AcpClientManager {
     this.currentConfig = null
     this.isInitializedFlag = false
     this.currentSessionId = null
+    this.supportsLoadSession = false
     this.recentStderr = ''
   }
 

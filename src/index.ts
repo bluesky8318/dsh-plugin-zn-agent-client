@@ -16,7 +16,8 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { SubagentProvider, SubagentRun, SubagentResult, ResolvedSubagentStartRequest, SubagentStopReason } from '@deepseek-ai/dsh-subagent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import { AcpClientManager } from './acp/client-manager.ts'
+import { AcpClientManager, type PromptOutcome } from './acp/client-manager.ts'
+import { SessionIndex } from './acp/session-index.ts'
 import type { AgentConfig } from './types/index.ts'
 
 /** 插件名（cordis.patch.yml 行 id 必须与此一致）。 */
@@ -36,6 +37,9 @@ export interface Config {
   /** 输出诊断日志（进程生命周期、stderr 摘要等）。 */
   logEvents: Volatile<boolean>
 }
+
+/** /acp 斜杠命令名。 */
+export const ACP_COMMAND_NAME = 'acp'
 
 // Schema<any> 注解：嵌套在 Schema.array 里的 Schema.object 会把 cosmokit 的
 // Dict 混进推断类型（TS2883 不可移植），而 Schema<Config> 精确注解又与
@@ -126,6 +130,32 @@ export function apply(ctx: Context, config: Config): void {
     return fallback ?? agents[0] ?? null
   }
 
+  /**
+   * 会话索引:ACP 会话历史存在 agent 侧(见 session-index.ts 模块注释),
+   * 这里记录 sessionId 句柄,供 list_acp_sessions 与 call_acp_agent 续聊。
+   */
+  const sessionIndex = new SessionIndex()
+
+  /**
+   * 所有通道(工具/命令/子代理)共用的"一轮 prompt":确保初始化 → 发送 →
+   * 把会话句柄写进索引(写失败不打断主流程)。
+   */
+  const runAgentTurn = async (
+    agent: AgentConfig,
+    prompt: string | readonly ContentBlock[],
+    options: { sessionId?: string } = {},
+  ): Promise<PromptOutcome> => {
+    await manager.ensureInitialized(agent)
+    const content: readonly ContentBlock[] = typeof prompt === 'string'
+      ? [{ type: 'text', text: prompt } as ContentBlock]
+      : prompt
+    const outcome = await manager.sendPrompt(content, options)
+    void sessionIndex
+      .record({ sessionId: outcome.sessionId, agentId: agent.id, cwd: agent.workingDirectory || process.cwd() })
+      .catch(() => undefined)
+    return outcome
+  }
+
   ctx.tools.register(
     defineTool({
       name: 'list_acp_agents',
@@ -204,7 +234,6 @@ export function apply(ctx: Context, config: Config): void {
         if (!agent) {
           throw new Error(`No ACP agent configured${args.agentId ? ` with id "${args.agentId}"` : ''}. Call list_acp_agents to see what is configured, or add agents in Settings → Plugins.`)
         }
-        await manager.ensureInitialized(agent)
 
         // 中止语义：工具被取消时向 agent 发 session/cancel。
         const onAbort = (): void => {
@@ -214,8 +243,9 @@ export function apply(ctx: Context, config: Config): void {
         else exec.signal.addEventListener('abort', onAbort, { once: true })
 
         try {
-          const outcome = await manager.sendPrompt(
-            [{ type: 'text', text: args.prompt }] satisfies ContentBlock[],
+          const outcome = await runAgentTurn(
+            agent,
+            [{ type: 'text', text: args.prompt }],
             args.sessionId ? { sessionId: args.sessionId } : {},
           )
           return {
@@ -227,6 +257,58 @@ export function apply(ctx: Context, config: Config): void {
           }
         } finally {
           exec.signal.removeEventListener('abort', onAbort)
+        }
+      },
+    }),
+  )
+
+  /** 列出本插件记录过的 ACP 会话句柄（历史在 agent 侧，这里只有 id）。 */
+  ctx.tools.register(
+    defineTool({
+      name: 'list_acp_sessions',
+      description: 'List ACP session handles previously used by this plugin (newest first). Pass a sessionId to call_acp_agent to continue one of these conversations on the agent side.',
+      parameters: {
+        agentId: { type: 'string', description: 'Only list sessions of this agent id; omit for all agents.' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            sessions: {
+              type: 'array',
+              required: true,
+              items: {
+                type: 'object',
+                properties: {
+                  sessionId: { type: 'string', required: true },
+                  agentId: { type: 'string', required: true },
+                  cwd: { type: 'string', required: true },
+                  lastUsedAt: { type: 'string', required: true },
+                },
+                additionalProperties: false,
+              },
+            },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => {
+          const sessions = value?.sessions ?? []
+          if (sessions.length === 0) return [{ type: 'text', text: 'No recorded ACP sessions yet. Sessions appear here after call_acp_agent runs.' }]
+          const lines = sessions.map(session =>
+            `- ${session.agentId} · ${session.sessionId} · ${session.cwd} · ${session.lastUsedAt}`,
+          )
+          return [{ type: 'text', text: `Recorded ACP sessions (newest first):\n${lines.join('\n')}` }]
+        },
+      },
+      async execute(args) {
+        const records = await sessionIndex.list(args.agentId)
+        return {
+          sessions: records.map(record => ({
+            sessionId: record.sessionId,
+            agentId: record.agentId,
+            cwd: record.cwd,
+            lastUsedAt: record.lastUsedAt,
+          })),
         }
       },
     }),
@@ -244,8 +326,7 @@ export function apply(ctx: Context, config: Config): void {
         }
       }
       try {
-        await manager.ensureInitialized(agent)
-        const outcome = await manager.sendPrompt(request.prompt, {})
+        const outcome = await runAgentTurn(agent, request.prompt)
         return {
           output: [{ type: 'text', text: outcome.agentText }],
           stopReason: mapStopReason(outcome.stopReason),
@@ -287,6 +368,60 @@ export function apply(ctx: Context, config: Config): void {
     })
   })
   ctx.effect(() => offUpdate, `${name}: agent-update relay`)
+
+  // /acp 斜杠命令：键盘直达通道。命令处理器与本插件闭包共享同一个 manager,
+  // 所以 `/acp <agentId> <prompt>` 不经模型决策直接驱动 ACP 会话。
+  // 命令服务是可选组合:宿主没组 dsh-commands 时静默跳过。
+  ctx.inject(['commands'], (commandCtx) => {
+    interface AcpCommandInvocation {
+      readonly rawInput: string
+    }
+    interface AcpCommandResult {
+      kind: 'success' | 'error'
+      text?: string
+    }
+    interface AcpCommandDefinition {
+      readonly name: string
+      readonly description: string
+      readonly handler: (invocation: AcpCommandInvocation) => AcpCommandResult | Promise<AcpCommandResult>
+    }
+    interface CommandsLike {
+      register(definition: AcpCommandDefinition): unknown
+    }
+    ;(commandCtx as Context & { commands: CommandsLike }).commands.register({
+      name: ACP_COMMAND_NAME,
+      description: 'ACP 智能体：/acp 列出清单；/acp <agentId> <prompt> 直接调用。',
+      handler: async ({ rawInput }): Promise<AcpCommandResult> => {
+        const input = rawInput.trim()
+        const agents = config.agents.get()
+        if (input === '') {
+          if (agents.length === 0) {
+            return { kind: 'success', text: '尚未配置任何 ACP agent。请到 设置 → 插件 里添加,或在 cordis.patch.yml 的本插件 config.agents 里配置。' }
+          }
+          const lines = agents.map((agent) => `- ${agent.id} (${agent.displayName}) — ${agent.command} ${agent.args.join(' ')}`.trimEnd())
+          return { kind: 'success', text: `已配置的 ACP agent:\n${lines.join('\n')}\n\n用法: /acp <agentId> <prompt>` }
+        }
+        // 第一个 token 若命中清单里的 id 就用它,否则整段作为 prompt 交给默认 agent。
+        const [first, ...rest] = input.split(/\s+/)
+        const candidate = agents.find(agent => agent.id === first)
+        const agent = candidate ?? resolveAgentConfig()
+        const prompt = candidate ? rest.join(' ') : input
+        if (!agent) {
+          return { kind: 'error', text: `找不到 ACP agent "${first ?? ''}"。用 /acp 查看清单。` }
+        }
+        if (prompt === '') {
+          return { kind: 'error', text: `用法: /acp ${agent.id} <prompt>` }
+        }
+        try {
+          const outcome = await runAgentTurn(agent, prompt)
+          const footer = `\n\n(${agent.id} · ${outcome.sessionId})`
+          return { kind: 'success', text: `${outcome.agentText}${footer}` }
+        } catch (error) {
+          return { kind: 'error', text: `ACP 调用失败: ${error instanceof Error ? error.message : String(error)}` }
+        }
+      },
+    })
+  })
 
   ctx.emit('zn-agent-client/ready', { id: name })
 }

@@ -1,6 +1,6 @@
 /**
- * 客户端半边入口：唯一职责是注册文案字典、注入样式，并把各 UI 面的注册
- * 组装起来。
+ * 客户端半边入口：唯一职责是注册文案字典、注入样式、创建配置模型控制器，
+ * 并把各 UI 面（配置卡片 / agent picker 浮层 / 侧栏入口）的注册组装起来。
  *
  * 依赖纪律：浏览器半边不 import 任何宿主侧包。`react` 由浏览器模块表提供，
  * 其它 harness 客户端包只以 `import type` 出现（类型擦除，不产生模块请求）。
@@ -12,8 +12,11 @@
 // 类型引入：拉进各宿主包的 Context 与插槽表声明合并。
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
+import { createConfigForm } from './config-form.ts'
+import { registerConfigCard } from './config-card.tsx'
 import { LOCALE_NAMESPACE } from './constants.ts'
 import { en, zh, type ZnAgentClientLocaleKey } from './locales.ts'
 import { registerShellOverlay } from './shell-overlay.tsx'
@@ -28,14 +31,15 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** 依赖的服务：slots 与 locale 就绪后本插件才会加载。 */
-export const inject = ['slots', 'locale']
+/** 依赖的服务：slots、locale、configForms 就绪后本插件才会加载。 */
+export const inject = ['slots', 'locale', 'configForms']
 
 /**
  * 挂载本插件的浏览器半边。
  *
- * 当前里程碑只注册状态类 UI（侧栏开关 + 浮层提示）；配置表单、聊天行等
- * 面板按里程碑计划在后继版本补充（模板参考实现见 git 历史）。
+ * 配置模型控制器在入口创建一次，同时供两处消费：
+ * - `plugins.bundle.config` 卡片（读快照 + 提交修改）
+ * - agent picker 浮层（只读快照，展示当前 agent 清单）
  * @param ctx - 客户端根上下文。
  */
 export function apply(ctx: Context): void {
@@ -47,6 +51,10 @@ export function apply(ctx: Context): void {
   // 样式表同样挂 effect：返回的清理函数会在插件停用时移除样式节点。
   ctx.effect(() => injectStyles())
 
+  // 配置模型：一次创建，多处注入。
+  const controller = createConfigForm(ctx)
+
+  registerConfigCard(ctx, controller)
+  registerShellOverlay(ctx, controller)
   registerSidebarAction(ctx)
-  registerShellOverlay(ctx)
 }

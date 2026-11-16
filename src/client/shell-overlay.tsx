@@ -1,68 +1,152 @@
 /**
- * 全局浮层：`shell.overlay`，一个可关闭的浮层 pill。
+ * 工作区入口浮层：agent picker。
  *
- * root 级 list 插槽；只提供 `inset: 0` 的全屏定位层，布局要自己做
- * （见 styles.ts 的固定定位与边距）。浮层必须能从自身按钮、点击外部和
- * Escape 键三条路径关闭，否则键盘和鼠标用户都走不出去。
- * @module dsh-plugin-zn-agent-client/client/shell-overlay
+ * `shell.overlay` 是帧级浮层插槽（root 级 list）。两个入口都会打开它：
+ * - 侧栏底部动作（sidebar.footer.action，见 sidebar-action.tsx）
+ * - 浮层自身按钮 / 点击外部 / Escape 关闭
+ *
+ * 打开信号经 document CustomEvent（'znac:open-launcher'）传递：插槽组件没有
+ * 共同的父组件，跨插槽通信用宿主文档级事件最直白。
+ *
+ * 浮层内容：已配置 agent 的卡片清单（来自配置表单模型快照），每张卡片带
+ * "复制 /acp 用法" 按钮。真正的对话在宿主会话里由 /acp 命令或 call_acp_agent
+ * 工具驱动 —— DSH 目前的客户端面没有"插件客户端→宿主工具"通道，浮层内嵌
+ * 聊天需要那样的桥，先不做（README 里有说明）。
+ * @module dsh-plugin-zn-agent-client/client/agent-launcher
  */
 
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-import type { PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import React from 'react'
 import { LOCALE_NAMESPACE, NAMESPACE } from './constants.ts'
+import type { ConfigFormController, ConfigFormFace, ConfigSnapshot } from './config-form.ts'
 
-/** 注册项的 props。 */
-type ShellOverlayProps = PropsLocale<typeof LOCALE_NAMESPACE>
+/** 打开浮层的 document 事件名。 */
+export const OPEN_LAUNCHER_EVENT = 'znac:open-launcher'
+
+/** 已接受值里的单条 agent 形状（宽松读取）。 */
+interface AcceptedAgent {
+  id?: unknown
+  displayName?: unknown
+  command?: unknown
+  args?: unknown
+}
+
+/** 从快照读出 agent 卡片数据。 */
+function readAgents(value: Record<string, unknown>): Array<{ id: string; displayName: string; commandLine: string }> {
+  const agents = Array.isArray(value.agents) ? value.agents as AcceptedAgent[] : []
+  return agents.map((agent) => {
+    const id = typeof agent.id === 'string' ? agent.id : ''
+    const displayName = typeof agent.displayName === 'string' && agent.displayName !== '' ? agent.displayName : id
+    const command = typeof agent.command === 'string' ? agent.command : ''
+    const args = Array.isArray(agent.args) ? agent.args.map(String).join(' ') : ''
+    return { id, displayName, commandLine: `${command} ${args}`.trim() }
+  }).filter(agent => agent.id !== '')
+}
+
+/** 注册项的 props：owner 的值、`t` 席位、配置模型注入面。 */
+type LauncherProps = PropsLocale<typeof LOCALE_NAMESPACE> & InjectFace<ConfigFormFace>
 
 /**
- * 注册 `shell.overlay` 的浮层。
+ * 注册 shell.overlay 的 agent picker 浮层。
  * @param ctx - 客户端根上下文。
+ * @param controller - 入口创建的配置模型，与配置卡片共享。
  */
-export function registerShellOverlay(ctx: Context): void {
+export function registerShellOverlay(ctx: Context, controller: ConfigFormController): void {
   ctx.slots.inject('shell.overlay', () => ctx.slots.register(
-    { name: 'shell.overlay', id: NAMESPACE, order: 30, locale: LOCALE_NAMESPACE },
-    ShellOverlay,
+    {
+      name: 'shell.overlay',
+      id: NAMESPACE,
+      order: 30,
+      locale: LOCALE_NAMESPACE,
+      inject: () => controller.inject(),
+    },
+    AgentLauncherOverlay,
   ))
 }
 
-/** 帧级浮层：自身按钮、点击外部、Escape 都能关闭。 */
-export function ShellOverlay(props: ShellOverlayProps): React.ReactElement | null {
+/**
+ * agent picker 浮层：侧栏底部动作触发打开；三条路径可关闭。
+ */
+export function AgentLauncherOverlay(props: LauncherProps): React.ReactElement | null {
   const { t } = props
-  const [dismissed, setDismissed] = React.useState(false)
+  const [open, setOpen] = React.useState(false)
+  const snapshot = props.useTemplateConfig((state: ConfigSnapshot) => state)
+  const [copiedId, setCopiedId] = React.useState<string | null>(null)
 
   React.useEffect(() => {
-    if (dismissed) return
+    const onOpen = (): void => { setOpen(true) }
+    document.addEventListener(OPEN_LAUNCHER_EVENT, onOpen)
+    return () => { document.removeEventListener(OPEN_LAUNCHER_EVENT, onOpen) }
+  }, [])
+
+  React.useEffect(() => {
+    if (!open) return
     const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setDismissed(true)
+      if (event.key === 'Escape') setOpen(false)
     }
     document.addEventListener('keydown', onKey)
     return () => { document.removeEventListener('keydown', onKey) }
-  }, [dismissed])
+  }, [open])
 
-  if (dismissed) return null
+  if (!open) return null
+  const agents = snapshot.status === 'ready' ? readAgents(snapshot.value) : []
+
+  const copyUsage = async (agentId: string): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(`/acp ${agentId} `)
+      setCopiedId(agentId)
+      window.setTimeout(() => { setCopiedId(current => (current === agentId ? null : current)) }, 1500)
+    } catch {
+      // 剪贴板不可用时静默：卡片上的命令行文本仍可手动选择复制。
+    }
+  }
+
   return (
     <div
-      className="znac-overlay"
+      className="znac-overlay znac-launcher"
       role="dialog"
-      aria-label={t('overlay.text')}
-      onClick={() => { setDismissed(true) }}
+      aria-label={t('launcher.title')}
+      onClick={() => { setOpen(false) }}
     >
-      <span
-        className="znac-overlay-text"
-        onClick={(event) => { event.stopPropagation() }}
-      >{t('overlay.text')}</span>
-      <button
-        type="button"
-        className="znac-overlay-close"
-        aria-label={t('overlay.close')}
-        onClick={() => { setDismissed(true) }}
-      >
-        ×
-      </button>
+      <div className="znac-launcher-body" onClick={(event) => { event.stopPropagation() }}>
+        <div className="znac-launcher-head">
+          <span className="znac-launcher-title">{t('launcher.title')}</span>
+          <button
+            type="button"
+            className="znac-overlay-close"
+            aria-label={t('launcher.close')}
+            onClick={() => { setOpen(false) }}
+          >
+            ×
+          </button>
+        </div>
+        {agents.length === 0
+          ? <p className="znac-launcher-empty">{t('launcher.empty')}</p>
+          : (
+            <ul className="znac-launcher-list">
+              {agents.map(agent => (
+                <li key={agent.id} className="znac-launcher-item">
+                  <div className="znac-launcher-meta">
+                    <span className="znac-launcher-name">{agent.displayName}</span>
+                    <code className="znac-launcher-cmd">{agent.commandLine}</code>
+                  </div>
+                  <button
+                    type="button"
+                    className="znac-launcher-copy"
+                    onClick={() => { void copyUsage(agent.id) }}
+                  >
+                    {copiedId === agent.id ? t('launcher.copied') : t('launcher.copy')}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        <p className="znac-launcher-hint">{t('launcher.hint')}</p>
+      </div>
     </div>
   )
 }

@@ -44,7 +44,7 @@ const client = {
     // 固定产物名 lib/client.js，与 package.json exports["./client"] 对应。
     entryFileNames: 'client.js',
     banner: 'window.__ModuleLoader__.load({ id: "dsh-plugin-zn-agent-client", factory: (require) => {',
-    footer: 'return module.exports; }',
+    footer: 'return module.exports; } });',
     intro: 'var module = { exports: {} }; var exports = module.exports;',
   },
 }

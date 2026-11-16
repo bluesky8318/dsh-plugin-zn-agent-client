@@ -10,6 +10,7 @@ import { apply, inject, name } from '../lib/index.js'
 
 const registeredTools = []
 const registeredProviders = []
+const registeredCommands = []
 const emitted = []
 const ctx = {
   tools: {
@@ -23,6 +24,19 @@ const ctx = {
       registeredProviders.push(provider)
       return () => {}
     },
+  },
+  // 可选服务的组合点：本插件用它挂 /acp 命令。
+  inject(services, fn) {
+    if (services.includes('commands')) {
+      fn({
+        commands: {
+          register(definition) {
+            registeredCommands.push(definition)
+            return () => {}
+          },
+        },
+      })
+    }
   },
   on() {
     return () => {}
@@ -61,9 +75,11 @@ assert.deepEqual(inject, ['tools', 'subagents'])
 
 assert.ok(registeredTools.some(t => t.name === 'list_acp_agents'), 'list_acp_agents should be registered')
 assert.ok(registeredTools.some(t => t.name === 'call_acp_agent'), 'call_acp_agent should be registered')
+assert.ok(registeredTools.some(t => t.name === 'list_acp_sessions'), 'list_acp_sessions should be registered')
 assert.equal(registeredProviders.length, 1, 'one subagent provider should be registered')
 assert.equal(registeredProviders[0].name, 'acp')
 assert.equal(typeof registeredProviders[0].start, 'function')
+assert.ok(registeredCommands.some(c => c.name === 'acp'), '/acp command should be registered')
 assert.ok(emitted.some(e => e.event === 'zn-agent-client/ready'), 'ready event should be emitted')
 
 // list_acp_agents 直接执行即可（不 spawn 进程）。
