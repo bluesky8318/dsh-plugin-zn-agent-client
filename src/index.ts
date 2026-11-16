@@ -445,6 +445,10 @@ export function apply(ctx: Context, config: Config): void {
       text?: string
     }
     interface AcpCommandDefinition {
+      /** 稳定定义标识(与官方命令生产方同构,可选)。 */
+      readonly definitionId?: string
+      /** composer 输入提示(可选)。 */
+      readonly input?: { readonly hint?: string }
       readonly name: string
       readonly description: string
       readonly handler: (invocation: AcpCommandInvocation) => AcpCommandResult | Promise<AcpCommandResult>
@@ -527,6 +531,10 @@ export function apply(ctx: Context, config: Config): void {
           return { kind: 'error', text: `ACP 调用失败: ${error instanceof Error ? error.message : String(error)}` }
         }
       },
+      // definitionId + input.hint 与官方命令生产方(dsh-plan-mode)同构:
+      // definitionId 是稳定标识,composer 的命令目录靠 remote.commands.list 拉取。
+      definitionId: 'dsh-plugin-zn-agent-client',
+      input: { hint: '[<agentId>|new|sessions] <消息>' },
     })
   })
 
