@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "插件模版",
-    "description": "DeepSeek Harness 插件示例：一个打招呼工具、示例命令、可选的权限拦截器，以及 Plugins 页上的配置表单。"
+    "title": "Zn Agent Client",
+    "description": "在 DeepSeek Harness 中通过 ACP（Agent Client Protocol）调用本机 CLI Agent：Claude Code、Codex、Gemini CLI、opencode 等。"
   }
 }
