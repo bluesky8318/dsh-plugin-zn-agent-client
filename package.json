@@ -1,13 +1,16 @@
 {
-  "name": "dsh-plugin-template",
-  "version": "0.2.0",
-  "description": "Starter template for DeepSeek Harness (dsh) plugins: GUI-editable config, tools, events, services, hooks, and a browser client half in one installable bundle.",
+  "name": "dsh-plugin-zn-agent-client",
+  "version": "0.1.0",
+  "description": "DSH plugin that adds ACP (Agent Client Protocol) capability: invoke local CLI agents (Claude Code, Codex, Gemini CLI, opencode, etc.) over stdio from within DeepSeek Harness.",
   "keywords": [
     "deepseek-harness",
     "dsh",
     "cordis",
     "plugin",
-    "template"
+    "acp",
+    "agent-client-protocol",
+    "claude-code",
+    "codex"
   ],
   "license": "MIT",
   "icon": "./icon.svg",
@@ -19,14 +22,6 @@
       "types": "./lib/index.d.ts",
       "default": "./lib/index.js"
     },
-    "./service": {
-      "types": "./lib/service.d.ts",
-      "default": "./lib/service.js"
-    },
-    "./hook": {
-      "types": "./lib/hook.d.ts",
-      "default": "./lib/hook.js"
-    },
     "./client": "./lib/client.js",
     "./locale/*.json": "./locale/*.json",
     "./cordis.patch.yml": "./cordis.patch.yml",
@@ -34,12 +29,8 @@
   },
   "files": [
     "lib/index.js",
-    "lib/service.js",
-    "lib/hook.js",
     "lib/client.js",
     "lib/index.d.ts",
-    "lib/service.d.ts",
-    "lib/hook.d.ts",
     "locale/*.json",
     "icon.svg",
     "cordis.patch.yml"
@@ -69,14 +60,26 @@
     "prepare": "tsdown"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "~3.18.4"
+    "@agentclientprotocol/sdk": "^1.4.0",
+    "@deepseek-ai/schemastery": "~3.19.0"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
-    "@deepseek-ai/dsh-tools": "0.1.7-rc.2"
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-subagent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session-projection": "0.2.2-rc.3"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "~4.0.4",
+    "@deepseek-ai/cordis": "~4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-subagent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-agent": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-llm": "0.2.2-rc.3",
+    "@deepseek-ai/dsh-session-projection": "0.2.2-rc.3",
     "@deepseek-ai/dsh-client-locale": "0.1.7-rc.2",
     "@deepseek-ai/dsh-client-ui-chat": "0.1.7-rc.2",
     "@deepseek-ai/dsh-client-ui-conversation": "0.1.7-rc.2",
@@ -87,8 +90,7 @@
     "@deepseek-ai/dsh-client-ui-sidebar": "0.1.7-rc.2",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.7-rc.2",
     "@deepseek-ai/dsh-client-ui-theme": "0.1.7-rc.2",
-    "@deepseek-ai/dsh-tools": "0.1.7-rc.2",
-    "@deepseek-ai/schemastery": "~3.18.4",
+    "@deepseek-ai/schemastery": "~3.19.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/jsdom": "^28.0.3",

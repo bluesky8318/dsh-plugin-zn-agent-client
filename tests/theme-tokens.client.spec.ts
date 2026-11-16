@@ -22,7 +22,7 @@ import { HOST_FONT_SIZES, VERIFIED_THEME_VERSION, VERIFIED_TOKENS } from './supp
  */
 function css(): string {
   const dispose = injectStyles()
-  const tag = document.querySelector('style[data-plugin="dsh-plugin-template"]')
+  const tag = document.querySelector('style[data-zn-agent-client-style]')
   if (tag === null) throw new Error('stylesheet was not injected')
   const text = tag.textContent ?? ''
   dispose()
@@ -40,7 +40,7 @@ function fontSizes(): string[] {
 }
 
 afterEach(() => {
-  document.querySelectorAll('style[data-plugin]').forEach(node => node.remove())
+  document.querySelectorAll('style[data-zn-agent-client-style]').forEach(node => node.remove())
 })
 
 describe('theme tokens', () => {

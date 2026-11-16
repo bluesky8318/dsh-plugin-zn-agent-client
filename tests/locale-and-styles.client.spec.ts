@@ -9,7 +9,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { en, zh, type TemplateLocaleKey } from '../src/client/locales.ts'
+import { en, zh, type ZnAgentClientLocaleKey } from '../src/client/locales.ts'
 import { injectStyles } from '../src/client/styles.ts'
 
 /** 客户端半边源码目录。 */
@@ -34,7 +34,7 @@ describe('locale dictionaries', () => {
   })
 
   it('has a non-empty value for every declared key', () => {
-    const declared = Object.keys(en) as TemplateLocaleKey[]
+    const declared = Object.keys(en) as ZnAgentClientLocaleKey[]
     for (const key of declared) {
       expect(en[key], `en.${key} should be non-empty`).toBeTruthy()
       expect(zh[key], `zh.${key} should be non-empty`).toBeTruthy()
@@ -69,7 +69,7 @@ describe('locale dictionaries', () => {
           .toBe(true)
       }
     }
-    expect(used.size, 'the client half should read its copy from the dictionary').toBeGreaterThan(10)
+    expect(used.size, 'the client half should read its copy from the dictionary').toBeGreaterThanOrEqual(3)
   })
 })
 
@@ -80,7 +80,7 @@ describe('stylesheet', () => {
    */
   function css(): string {
     const dispose = injectStyles()
-    const tag = document.querySelector('style[data-plugin="dsh-plugin-template"]')
+    const tag = document.querySelector('style[data-zn-agent-client-style]')
     if (tag === null) throw new Error('stylesheet was not injected')
     const text = tag.textContent ?? ''
     dispose()
@@ -103,8 +103,8 @@ describe('stylesheet', () => {
 
   it('marks the sheet with the plugin name so its owner is identifiable', () => {
     const dispose = injectStyles()
-    expect(document.querySelectorAll('style[data-plugin="dsh-plugin-template"]')).toHaveLength(1)
+    expect(document.querySelectorAll('style[data-zn-agent-client-style]')).toHaveLength(1)
     dispose()
-    expect(document.querySelectorAll('style[data-plugin="dsh-plugin-template"]')).toHaveLength(0)
+    expect(document.querySelectorAll('style[data-zn-agent-client-style]')).toHaveLength(0)
   })
 })

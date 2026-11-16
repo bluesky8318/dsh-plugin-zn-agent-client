@@ -1,6 +1,5 @@
-// 构建产物上的冒烟测试：验证 greet 工具已注册、按当前配置取词、
-// 自定义事件已监听、/hello 与 /dsh-demo 两条命令已注册，以及 hook 权限
-// 拦截器会拒绝禁用工具。
+// 构建产物上的冒烟测试：验证 list_acp_agents / call_acp_agent 两个工具已注册、
+// acp 子代理提供方已注册、工具能按当前配置读到 agent 清单。
 //
 // 运行方式：先 `pnpm build`，再 `node test/smoke.mjs`。
 //
@@ -8,16 +7,20 @@
 // 插槽宿主，不在这里测。
 import assert from 'node:assert/strict'
 import { apply, inject, name } from '../lib/index.js'
-import * as hook from '../lib/hook.js'
 
-// 只实现被用到成员的最小 ctx。`tools` 由 inject 提供；`commands` 是可选服务，
-// 这里显式提供以便断言命令注册。
-const registered = []
-const registeredCommands = []
+const registeredTools = []
+const registeredProviders = []
+const emitted = []
 const ctx = {
   tools: {
     register(definition) {
-      registered.push(definition)
+      registeredTools.push(definition)
+      return () => {}
+    },
+  },
+  subagents: {
+    registerProvider(provider) {
+      registeredProviders.push(provider)
       return () => {}
     },
   },
@@ -27,46 +30,52 @@ const ctx = {
   effect() {
     return () => {}
   },
-  inject(names, callback) {
-    if (names.includes('commands')) {
-      callback({ commands: { register(definition) { registeredCommands.push(definition) } } })
-    }
-    return () => {}
+  emit(event, payload) {
+    emitted.push({ event, payload })
   },
 }
 
 // 配置值以 Volatile 引用的形式出现：{ get(): value }
 const config = {
-  greeting: { get: () => 'Hi' },
-  maxRetries: { get: () => 5 },
-  verbose: { get: () => false },
+  agents: {
+    get: () => [
+      {
+        id: 'claude-code',
+        displayName: 'Claude Code',
+        command: 'claude-agent-acp',
+        args: [],
+        env: {},
+        workingDirectory: process.cwd(),
+      },
+    ],
+  },
+  defaultAgent: { get: () => 'claude-code' },
+  autoAllowPermissions: { get: () => true },
+  logEvents: { get: () => false },
 }
+
 apply(ctx, config)
 
-assert.equal(name, 'dsh-plugin-template')
-assert.deepEqual(inject, ['tools'])
+assert.equal(name, 'dsh-plugin-zn-agent-client')
+assert.deepEqual(inject, ['tools', 'subagents'])
 
-const tool = registered.find(t => t.name === 'greet')
-assert.ok(tool, 'greet tool should be registered')
-assert.equal(await tool.execute({ name: 'Ada' }), 'Hi, Ada!')
-assert.equal(typeof tool.presentResult, 'function', 'greet tool should define presentResult')
+assert.ok(registeredTools.some(t => t.name === 'list_acp_agents'), 'list_acp_agents should be registered')
+assert.ok(registeredTools.some(t => t.name === 'call_acp_agent'), 'call_acp_agent should be registered')
+assert.equal(registeredProviders.length, 1, 'one subagent provider should be registered')
+assert.equal(registeredProviders[0].name, 'acp')
+assert.equal(typeof registeredProviders[0].start, 'function')
+assert.ok(emitted.some(e => e.event === 'zn-agent-client/ready'), 'ready event should be emitted')
 
-// 配置改为实时取值后，同一个工具实例应读到新值，不需要重新注册。
-config.greeting = { get: () => 'Hey' }
-assert.equal(await tool.execute({ name: 'Bob' }), 'Hey, Bob!')
+// list_acp_agents 直接执行即可（不 spawn 进程）。
+const listTool = registeredTools.find(t => t.name === 'list_acp_agents')
+const listed = await listTool.execute({})
+assert.deepEqual(listed, {
+  agents: [{ id: 'claude-code', displayName: 'Claude Code', command: 'claude-agent-acp' }],
+})
 
-assert.ok(registeredCommands.some(c => c.name === 'hello'), 'hello command should be registered')
-assert.ok(registeredCommands.some(c => c.name === 'dsh-demo'), 'demo command should be registered')
-
-// hook 权限拦截器：拒绝禁用工具，放行其它工具。
-let listener
-hook.apply({ on(_event, fn) { listener = fn } }, { denyTools: ['bash'] })
-assert.ok(listener, 'tools/pre-execute listener should be registered')
-
-const denied = await listener({ name: 'bash' }, () => Promise.resolve({ kind: 'allow' }))
-assert.deepEqual(denied, { kind: 'deny', reason: 'Tool "bash" is denied by policy.' })
-
-const allowed = await listener({ name: 'greet' }, () => Promise.resolve({ kind: 'allow' }))
-assert.deepEqual(allowed, { kind: 'allow' })
+// 配置实时读取：改清单后同一工具实例应读到新值。
+config.agents.get = () => []
+const listedEmpty = await listTool.execute({})
+assert.deepEqual(listedEmpty, { agents: [] })
 
 console.log('smoke ok')
