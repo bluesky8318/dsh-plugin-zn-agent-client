@@ -459,6 +459,93 @@ const CSS = `
 }
 .znac-view-restart:hover { background: var(--dsw-alias-interactive-bg-hover); }
 
+/* 方案C 会话区：控件条（新会话/继续最近/历史▾）+ 终端。 */
+.znac-view-sesarea {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.znac-view-sesbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+}
+.znac-view-sbtn {
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  padding: 3px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.znac-view-sbtn:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-view-sbtn[data-kind='primary'] { border-color: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-state-business-primary); }
+.znac-view-sbtn:disabled { cursor: default; opacity: 0.6; }
+.znac-view-histwrap { position: relative; }
+.znac-view-hist {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 12;
+  min-width: 320px;
+  max-width: 480px;
+  max-height: 280px;
+  overflow: auto;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  padding: 4px;
+}
+.znac-view-hist-empty {
+  padding: 8px 10px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.znac-view-hist-item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: var(--dsw-radius-sm);
+  padding: 6px 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  cursor: pointer;
+}
+.znac-view-hist-item:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-view-hist-summary {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.znac-view-hist-meta { color: var(--dsw-alias-label-tertiary); white-space: nowrap; }
+.znac-view-hist-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+.znac-view-seslabel {
+  margin-left: auto;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* xterm.js 的必要骨架规则（内联自 @xterm/xterm 的 xterm.css——bundle 不加载
    外部 css 文件），配色交给容器上的主题 token。 */
 .znac-agent-term {

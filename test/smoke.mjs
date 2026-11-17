@@ -32,7 +32,7 @@ const ctx = {
       // CLI 终端宿主面：stub 只验证注册路径，不真的 spawn。
       fn({
         subprocess: {},
-        webServer: { register() { registeredRoutes.push('route'); return () => {} } },
+        webServer: { register(route) { registeredRoutes.push(route.path); return () => {} } },
         workingDirectory: { defaultDirectory: process.cwd() },
       })
       return
@@ -51,8 +51,10 @@ const ctx = {
   on() {
     return () => {}
   },
-  effect() {
-    return () => {}
+  // cordis 语义：注册即执行回调，返回清理函数。
+  effect(fn) {
+    const cleanup = fn()
+    return typeof cleanup === 'function' ? cleanup : () => {}
   },
   emit(event, payload) {
     emitted.push({ event, payload })
@@ -90,6 +92,8 @@ assert.equal(registeredProviders.length, 1, 'one subagent provider should be reg
 assert.equal(registeredProviders[0].name, 'acp')
 assert.equal(typeof registeredProviders[0].start, 'function')
 assert.ok(registeredCommands.some(c => c.name === 'znacp'), '/znacp command should be registered')
+assert.ok(registeredRoutes.includes('/api/zn-agent-client/sessions'), '/sessions route should be registered')
+assert.equal(registeredRoutes.length, 6, 'six CLI routes expected')
 assert.ok(emitted.some(e => e.event === 'zn-agent-client/ready'), 'ready event should be emitted')
 
 // list_acp_agents 直接执行即可（不 spawn 进程）。

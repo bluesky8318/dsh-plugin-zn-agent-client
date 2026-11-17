@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>dsh-plugin-zn-agent-client — 会话交互方案预览（C / A）</title>
+<style>
+  :root {
+    --bg: #141518; --bg-layer: #1d1f23; --bg-layer2: #24262b;
+    --border: #2e3138; --border-soft: #262931;
+    --label: #e8eaed; --label-2: #9aa0a8; --label-3: #6b7078;
+    --accent: #4f8cff; --accent-soft: rgba(79,140,255,.14);
+    --ok: #34c77b; --warn: #e0a33c; --err: #e05c5c;
+    --radius: 10px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--label); font: 13px/1.55 -apple-system, "PingFang SC", sans-serif; padding: 20px; }
+  h1 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .sub { color: var(--label-2); margin-bottom: 14px; }
+  .switcher { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin-bottom: 16px; }
+  .switcher button { background: transparent; color: var(--label-2); border: 0; padding: 7px 18px; cursor: pointer; font-size: 13px; }
+  .switcher button.on { background: var(--accent-soft); color: var(--label); }
+  .note { color: var(--label-3); font-size: 12px; margin: 10px 0 18px; max-width: 720px; }
+  .mock { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg-layer); overflow: hidden; max-width: 980px; }
+  .mock.hidden { display: none; }
+  .mockbar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); background: var(--bg-layer2); color: var(--label-2); font-size: 12px; }
+  .mockbar b { color: var(--label); font-weight: 500; }
+  .tag { font-size: 11px; border: 1px solid var(--border); border-radius: 99px; padding: 1px 8px; color: var(--label-3); }
+
+  /* ===== 共用：agent chips ===== */
+  .chips { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 99px; padding: 4px 12px; background: transparent; color: var(--label-2); cursor: pointer; font-size: 12px; }
+  .chip.on { border-color: var(--accent); color: var(--label); background: var(--accent-soft); }
+  .dot { width: 7px; height: 7px; border-radius: 99px; background: var(--label-3); }
+  .dot.run { background: var(--ok); } .dot.exit { background: var(--err); }
+  .spacer { flex: 1; }
+
+  /* ===== 方案C ===== */
+  .sessionbar { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-bottom: 1px solid var(--border-soft); }
+  .sbtn { border: 1px solid var(--border); background: transparent; color: var(--label); border-radius: 7px; padding: 4px 12px; font-size: 12px; cursor: pointer; }
+  .sbtn:hover { border-color: var(--accent); }
+  .sbtn.primary { background: var(--accent-soft); border-color: var(--accent); }
+  .ses-label { color: var(--label-3); font-size: 12px; }
+  .ses-id { font-family: var(--mono); font-size: 11px; color: var(--label-2); }
+  .menu { position: absolute; z-index: 5; min-width: 300px; background: var(--bg-layer2); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45); padding: 6px; }
+  .menu.hidden { display: none; }
+  .menu .mi { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 7px; cursor: pointer; font-size: 12.5px; }
+  .menu .mi:hover { background: var(--accent-soft); }
+  .menu .mi .mono { font-family: var(--mono); font-size: 11px; color: var(--label-3); margin-left: auto; }
+  .menu .sep { height: 1px; background: var(--border-soft); margin: 5px 4px; }
+  .menu .mi .sub2 { color: var(--label-3); font-size: 11px; }
+  .term { position: relative; }
+  .term pre { font-family: var(--mono); font-size: 12px; line-height: 1.5; padding: 14px 16px; min-height: 240px; white-space: pre-wrap; color: #c9d1d9; }
+  .term pre .p { color: var(--ok); } .term pre .dim { color: var(--label-3); } .term pre .acc { color: #79b8ff; }
+  .toast { position: absolute; right: 12px; bottom: 12px; background: var(--bg-layer2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; font-size: 12px; color: var(--label-2); opacity: 0; transition: opacity .25s; }
+  .toast.show { opacity: 1; }
+
+  /* ===== 方案A ===== */
+  .a-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); }
+  .a-select { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 8px; padding: 5px 10px; cursor: pointer; font-size: 12.5px; }
+  .a-more { border: 1px solid var(--border); background: transparent; color: var(--label-2); border-radius: 8px; width: 28px; height: 28px; cursor: pointer; font-size: 14px; }
+  .a-more:hover { color: var(--label); border-color: var(--accent); }
+  .chat { padding: 14px 16px; min-height: 250px; display: flex; flex-direction: column; gap: 10px; }
+  .bubble { max-width: 78%; border-radius: 10px; padding: 8px 12px; font-size: 12.5px; }
+  .bubble.user { align-self: flex-end; background: var(--accent-soft); border: 1px solid rgba(79,140,255,.3); }
+  .bubble.bot { align-self: flex-start; background: var(--bg-layer2); border: 1px solid var(--border-soft); }
+  .bubble .who { font-size: 11px; color: var(--label-3); margin-bottom: 3px; }
+  .a-input { display: flex; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border-soft); }
+  .a-input input { flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--label); padding: 7px 10px; font-size: 12.5px; outline: none; }
+  .a-input input:focus { border-color: var(--accent); }
+  .a-input button { border: 0; background: var(--accent); color: #fff; border-radius: 8px; padding: 7px 16px; cursor: pointer; font-size: 12.5px; }
+  .modal { position: absolute; inset: 0; background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center; z-index: 8; }
+  .modal.hidden { display: none; }
+  .dialog { width: 420px; background: var(--bg-layer2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .dialog h3 { font-size: 14px; margin-bottom: 10px; }
+  .dialog .row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 12.5px; }
+  .dialog .row:hover { background: var(--accent-soft); }
+  .dialog .row .mono { font-family: var(--mono); font-size: 11px; color: var(--label-3); margin-left: auto; }
+  .dialog .row .t { color: var(--label-3); font-size: 11px; }
+  .cmp { max-width: 980px; margin-top: 18px; border-collapse: collapse; font-size: 12.5px; }
+  .cmp th, .cmp td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; }
+  .cmp th { background: var(--bg-layer2); color: var(--label-2); font-weight: 500; }
+  .cmp td:first-child { color: var(--label-2); white-space: nowrap; }
+</style>
+</head>
+<body>
+  <h1>CLI Agent 会话交互 — 两个简易预览</h1>
+  <div class="sub">dsh-plugin-zn-agent-client · 方案C（混合式）vs 方案A（obsidian agentclient 菜单式）· 点击可模拟交互</div>
+
+  <div class="switcher">
+    <button id="tab-c" class="on" onclick="show('c')">方案C · 混合式（推荐）</button>
+    <button id="tab-a" onclick="show('a')">方案A · obsidian 菜单式</button>
+  </div>
+
+  <!-- ===================== 方案 C ===================== -->
+  <div id="mock-c" class="mock">
+    <div class="mockbar">CLI Agent 视图 · conversation.view 插槽 <span class="tag">qoder · /Users/leon/work/zeronote/scm/github</span></div>
+    <div class="chips" id="c-chips">
+      <button class="chip on" data-agent="qoder" onclick="pickAgent(this)"><span class="dot run"></span>Qoder CLI</button>
+      <button class="chip" data-agent="kimi" onclick="pickAgent(this)"><span class="dot exit"></span>Kimi CLI</button>
+      <span class="spacer"></span>
+      <span class="ses-label">会话</span>
+      <button class="sbtn primary" onclick="newSession()">＋ 新会话</button>
+      <button class="sbtn" onclick="continueLatest()">↻ 继续最近</button>
+      <button class="sbtn" id="c-hist-btn" onclick="toggleMenu('c-menu', this)">历史 ▾</button>
+    </div>
+    <div class="sessionbar">
+      <span class="ses-label">当前会话</span>
+      <span class="ses-id" id="c-cur">9934e852 · 延续中</span>
+      <span class="ses-label" id="c-cwd">workspace: /Users/leon/work/zeronote/scm/github</span>
+    </div>
+    <div class="term" style="position:relative">
+      <pre id="c-term">❯ qoder
+<span class="dim">Qoder CLI v1.1.90 · workspace /Users/leon/work/zeronote/scm/github</span>
+› 列出 src 下所有 TODO 注释
+<span class="acc">⏺ 正在扫描 src/ … 找到 12 处 TODO</span>
+…
+
+<span class="dim">— 会话控件作用：新会话=全新 PTY；继续最近=-c 续接最近会话；历史=按 agent × 当前 workspace 过滤的会话列表，点选后 --resume &lt;id&gt; 还原 —</span></pre>
+      <div class="menu hidden" id="c-menu">
+        <div class="mi" onclick="resumeSession('297cf55a', '记住暗号 ZNAC-7391…')">297cf55a <span class="sub2">昨天 18:22</span><span class="mono">--resume 297cf55a…</span></div>
+        <div class="mi" onclick="resumeSession('401daee9', 'e2e 恢复测试会话')">401daee9 <span class="sub2">今天 12:59</span><span class="mono">--resume 401daee9…</span></div>
+        <div class="mi" onclick="resumeSession('f66baa3d', 'PONG 验证会话')">f66baa3d <span class="sub2">今天 11:02</span><span class="mono">--resume f66baa3d…</span></div>
+      </div>
+      <div class="toast" id="c-toast"></div>
+    </div>
+  </div>
+
+  <!-- ===================== 方案 A ===================== -->
+  <div id="mock-a" class="mock hidden" style="position:relative">
+    <div class="mockbar">CLI Agent 视图 · obsidian agentclient 风格（对话流）<span class="tag">示意</span></div>
+    <div class="a-head">
+      <span class="a-select" onclick="toggleMenu('a-agents', this)">● Qoder CLI ▾</span>
+      <span class="spacer" style="flex:1"></span>
+      <button class="a-more" onclick="toggleMenu('a-menu', this)">⋯</button>
+    </div>
+    <div class="chat">
+      <div class="bubble user"><div class="who">你</div>列出 src 下所有 TODO 注释</div>
+      <div class="bubble bot"><div class="who">Qoder CLI · 会话 9934e852</div>找到 12 处 TODO：…（agent 回复以对话气泡呈现，工具调用折叠为一行）</div>
+      <div class="bubble user"><div class="who">你</div>把 src/cli.ts 的 TODO-3 修掉</div>
+      <div class="bubble bot"><div class="who">Qoder CLI · 工具调用 edit(src/cli.ts)</div>已修改，1 处 TODO 完成 ✓</div>
+    </div>
+    <div class="a-input">
+      <input placeholder="输入消息，发给当前 CLI agent…" />
+      <button>发送</button>
+    </div>
+
+    <div class="menu hidden" id="a-agents" style="top:44px; left:12px">
+      <div class="mi" onclick="toastA('切换到 Qoder CLI')">● Qoder CLI <span class="mono">qodercli</span></div>
+      <div class="mi" onclick="toastA('切换到 Kimi CLI')">○ Kimi CLI <span class="mono">kimi acp</span></div>
+    </div>
+    <div class="menu hidden" id="a-menu" style="top:44px; right:12px">
+      <div class="mi" onclick="toastA('新会话：全新 PTY，当前 workspace')">🆕 新会话</div>
+      <div class="mi" onclick="openHistory()">🕘 会话历史…</div>
+      <div class="mi" onclick="toastA('重命名当前会话')">✏️ 重命名会话</div>
+      <div class="mi" onclick="toastA('导出当前会话为 Markdown')">📤 导出为 Markdown</div>
+      <div class="sep"></div>
+      <div class="mi" onclick="toastA('重启 agent 进程')">🔄 重启 agent</div>
+      <div class="mi" onclick="toastA('在目录中新建会话：选择 workspace 子目录')">📁 在目录中新建会话…</div>
+      <div class="sep"></div>
+      <div class="mi" onclick="toastA('打开会话管理器（全部 agent × 全部 workspace）')">🗂 会话管理器</div>
+    </div>
+    <div class="modal hidden" id="a-hist">
+      <div class="dialog">
+        <h3>会话历史 · Qoder CLI · /Users/leon/work/zeronote/scm/github</h3>
+        <div class="row" onclick="closeHistory(); toastA('还原会话 297cf55a')"><span class="mono">297cf55a</span><span class="t">记住暗号 ZNAC-7391…</span><span class="mono">昨天 18:22</span></div>
+        <div class="row" onclick="closeHistory(); toastA('还原会话 401daee9')"><span class="mono">401daee9</span><span class="t">e2e 恢复测试会话</span><span class="mono">今天 12:59</span></div>
+        <div class="row" onclick="closeHistory(); toastA('还原会话 f66baa3d')"><span class="mono">f66baa3d</span><span class="t">PONG 验证会话</span><span class="mono">今天 11:02</span></div>
+        <div style="text-align:right; margin-top:12px"><button class="sbtn" onclick="closeHistory()">关闭</button></div>
+      </div>
+    </div>
+    <div class="toast" id="a-toast" style="position:absolute; right:14px; bottom:64px;"></div>
+  </div>
+
+  <table class="cmp">
+    <tr><th></th><th>方案C · 混合式</th><th>方案A · obsidian 菜单式</th></tr>
+    <tr><td>界面形态</td><td>内嵌终端（已验收）+ 顶部会话控件条</td><td>对话气泡流 + 输入框 + agent 下拉/⋯ 菜单</td></tr>
+    <tr><td>会话还原</td><td>--resume &lt;id&gt; 让 CLI 自己恢复 TUI 上下文（已验证 qoder/kimi/claude）</td><td>同左（底层一致）</td></tr>
+    <tr><td>改动量</td><td>小：顶部控件条 + 会话列表数据源（agent 端 --list-sessions / session-index）</td><td>大：重写视图为消息流（需截获 ACP 会话消息或解析终端），导出/重命名等附加功能</td></tr>
+    <tr><td>会话列表来源</td><td>qodercli --list-sessions / kimi session list / claude 内建 + 插件 session-index（agent × workspace 过滤）</td><td>同左</td></tr>
+    <tr><td>风险</td><td>低（复用现有 PTY 通道）</td><td>消息流需要新的 ACP 通道（call_acp_agent 思路）或终端解析，工具调用呈现复杂</td></tr>
+  </table>
+
+<script>
+  function show(k) {
+    document.getElementById('mock-c').classList.toggle('hidden', k !== 'c');
+    document.getElementById('mock-a').classList.toggle('hidden', k !== 'a');
+    document.getElementById('tab-c').classList.toggle('on', k === 'c');
+    document.getElementById('tab-a').classList.toggle('on', k === 'a');
+    closeMenus();
+  }
+  function closeMenus() { document.querySelectorAll('.menu').forEach(m => m.classList.add('hidden')); }
+  document.addEventListener('mousedown', e => {
+    if (!e.target.closest('.menu') && !e.target.closest('#c-hist-btn') && !e.target.closest('.a-more') && !e.target.closest('.a-select')) closeMenus();
+  });
+  function toggleMenu(id, btn) {
+    const m = document.getElementById(id);
+    const wasHidden = m.classList.contains('hidden');
+    closeMenus();
+    if (wasHidden) m.classList.remove('hidden');
+  }
+  function pickAgent(chip) {
+    chip.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+    chip.classList.add('on');
+    const agent = chip.dataset.agent;
+    document.getElementById('c-cur').textContent = agent === 'qoder' ? '9934e852 · 延续中' : '（kimi 尚无会话）';
+    toastC(agent === 'qoder' ? '已切换到 Qoder CLI' : '已切换到 Kimi CLI（agent × workspace 过滤会话）');
+  }
+  function toastC(msg) { const t = document.getElementById('c-toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
+  function toastA(msg) { const t = document.getElementById('a-toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); }
+  function newSession() {
+    document.getElementById('c-term').innerHTML = '❯ qoder\n<span class="dim">新 PTY · 全新会话 · workspace /Users/leon/work/zeronote/scm/github</span>\n';
+    document.getElementById('c-cur').textContent = '（新会话，等待首条输出分配 id）';
+    toastC('新会话已创建');
+  }
+  function continueLatest() { toastC('继续最近：-c 续接 297cf55a'); document.getElementById('c-cur').textContent = '297cf55a · 延续中'; }
+  function resumeSession(id) {
+    closeMenus();
+    document.getElementById('c-cur').textContent = id + ' · 已还原';
+    toastC('已还原会话 ' + id + '（--resume ' + id + '…）');
+  }
+  function openHistory() { closeMenus(); document.getElementById('a-hist').classList.remove('hidden'); }
+  function closeHistory() { document.getElementById('a-hist').classList.add('hidden'); }
+</script>
+</body>
+</html>

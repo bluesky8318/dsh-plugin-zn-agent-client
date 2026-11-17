@@ -66,6 +66,8 @@ export interface TerminalStatus {
   agentId: string
   displayName: string
   command: string
+  /** 实际敲进 shell 的启动行（resume 时带 flag，普通启动=命令本身）。 */
+  launch: string
   cwd: string
   cols: number
   rows: number
@@ -221,14 +223,17 @@ export class ManagedTerminal {
   private exited = false
   private closing: Promise<void> | null = null
   private commandStarted = false
+  private readonly launchLine: string
 
   constructor(
     readonly id: string,
     private readonly handle: TerminalHandle,
     status: TerminalStatus,
+    launchLine: string,
     private readonly onGone: (id: string) => void,
   ) {
     this.status = status
+    this.launchLine = launchLine !== '' ? launchLine : status.command
     this.screen = createScreenBuffer(status.cols, status.rows)
     void this.consume()
   }
@@ -331,7 +336,7 @@ export class ManagedTerminal {
   private startCommand(): void {
     if (this.commandStarted) return
     this.commandStarted = true
-    const command = this.status.command.trim()
+    const command = this.launchLine.trim()
     if (command !== '') void this.handle.write(`${command}\r`).catch(() => {})
   }
 
@@ -416,6 +421,10 @@ export interface OpenTerminalOptions {
   rows?: unknown
   restart?: boolean
   resume?: boolean
+  /** attach=幂等复用（默认）；new/continue/resume=重启 PTY 并敲对应命令行。 */
+  mode?: 'attach' | 'new' | 'continue' | 'resume'
+  /** 覆盖敲入 shell 的启动行（resume 场景由 cli-sessions.buildLaunchPlan 生成）。 */
+  launchLine?: string
 }
 
 export class CliTerminalController {
@@ -445,14 +454,15 @@ export class CliTerminalController {
   private async open(options: OpenTerminalOptions): Promise<ManagedTerminal> {
     if (this.disposed) throw new Error('终端控制器已关闭')
     if (typeof options.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(options.id)) throw new Error('无效的终端 ID')
-    if (options.restart === true) await this.close(options.id)
+    // new/continue/resume 都是「换会话」——正在跑的 TUI 必须先退掉再重新拉起。
+    const wantsFresh = options.restart === true || options.mode === 'new' || options.mode === 'continue' || options.mode === 'resume'
+    if (wantsFresh) await this.close(options.id)
     const existing = this.terminals.get(options.id)
     if (existing !== undefined && existing.running) {
       const dims = clampDimensions(options.cols, options.rows)
       await existing.resize(dims.cols, dims.rows)
       return existing
     }
-    if (existing !== undefined && options.resume === true) return existing
     if (existing !== undefined) await this.close(options.id)
 
     if (typeof this.subprocess.spawnTerminal !== 'function') throw new Error('当前 DSH 宿主未提供 subprocess.spawnTerminal 终端服务')
@@ -475,6 +485,7 @@ export class CliTerminalController {
       agentId: options.agentId,
       displayName: options.displayName,
       command: options.command,
+      launch: options.launchLine !== undefined && options.launchLine !== '' ? options.launchLine : options.command,
       cwd,
       cols: dims.cols,
       rows: dims.rows,
@@ -484,7 +495,13 @@ export class CliTerminalController {
     }
     let resolveFirstOutput: (() => void) | undefined
     const firstOutput = new Promise<void>((resolve) => { resolveFirstOutput = resolve })
-    const managed = new ManagedTerminal(options.id, handle, status, (id) => { this.terminals.delete(id) })
+    const managed = new ManagedTerminal(
+      options.id,
+      handle,
+      status,
+      options.launchLine ?? '',
+      (id) => { this.terminals.delete(id) },
+    )
     // 首个 output 帧发出即视为渲染器已挂上——用 attachSse 后的第一帧信号。
     const originalBroadcast = managed.broadcastFrame.bind(managed)
     managed.broadcastFrame = (frame: Record<string, unknown>) => {

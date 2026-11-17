@@ -12,7 +12,7 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
-import { acquireSession, type AgentTerminalSession } from './agent-stream.ts'
+import { acquireSession, listSessions, type AgentTerminalSession, type CliSessionEntry } from './agent-stream.ts'
 import { readAgents } from './shell-overlay.tsx'
 import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
@@ -120,40 +120,156 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
         )}
       </div>
       {active !== undefined && (
-        <EmbeddedTerminal
+        <SessionArea
           key={active.id}
           agentId={active.id}
-          sessionKey={sessionId}
+          sessionId={sessionId}
           displayName={active.displayName}
-          launchingLabel={t('view.launching')}
-          exitedLabel={t('view.exited')}
-          errorLabel={t('view.error')}
-          restartLabel={t('view.restart')}
-          noServiceLabel={t('view.noService')}
+          t={t}
         />
       )}
     </div>
   )
 }
 
-/** 内嵌终端：会话按 agentId 全局复用，React 只挂 DOM + 订阅状态。 */
-function EmbeddedTerminal(props: {
+/** 方案C 会话区：会话控件条（新会话/继续最近/历史▾）+ 内嵌终端。 */
+function SessionArea(props: {
   agentId: string
-  sessionKey: string
+  sessionId: string
+  displayName: string
+  t: (key: never) => string
+}): React.ReactElement {
+  const { agentId, sessionId, displayName } = props
+  // t 的键类型由 LocaleNamespaceMap 推导，运行时只是查表函数。
+  const t = props.t as (key: string) => string
+  const [session, setSession] = useState<AgentTerminalSession | null>(null)
+  const [histOpen, setHistOpen] = useState(false)
+  const [histState, setHistState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
+  const [histItems, setHistItems] = useState<readonly CliSessionEntry[]>([])
+  const histRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    setSession(acquireSession(agentId, sessionId))
+  }, [agentId, sessionId])
+
+  // 历史菜单打开时点外部/按 Esc 都关闭（与 ACP 弹框同一套交互约定）。
+  useEffect(() => {
+    if (!histOpen) return
+    const onDown = (event: MouseEvent): void => {
+      if (histRef.current !== null && event.target instanceof Node && !histRef.current.contains(event.target)) {
+        setHistOpen(false)
+      }
+    }
+    const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') setHistOpen(false) }
+    document.addEventListener('mousedown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [histOpen])
+
+  const state = useSyncExternalStore(
+    useMemo(() => (callback: () => void) => session?.subscribe(callback) ?? (() => {}), [session]),
+    useMemo(() => () => session?.getSnapshot(), [session]),
+  )
+
+  const loadHistory = (): void => {
+    setHistOpen(true)
+    if (histState === 'loading') return
+    setHistState('loading')
+    void listSessions(agentId, sessionId).then((items) => {
+      setHistItems(items)
+      setHistState('ready')
+    }).catch(() => { setHistState('failed') })
+  }
+
+  const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
+    setHistOpen(false)
+    void session?.openSession(action, label)
+  }
+
+  const shortId = (id: string): string => id.length > 8 ? id.slice(0, 8) : id
+
+  return (
+    <div className="znac-view-sesarea">
+      <div className="znac-view-sesbar" role="toolbar" aria-label={t('view.sessions')}>
+        <button
+          type="button"
+          className="znac-view-sbtn"
+          data-kind="primary"
+          disabled={session === null}
+          onClick={() => { runAction({ mode: 'new' }, t('view.labelNew')) }}
+        >
+          {t('view.newSession')}
+        </button>
+        <button
+          type="button"
+          className="znac-view-sbtn"
+          disabled={session === null}
+          onClick={() => { runAction({ mode: 'continue' }, t('view.labelContinue')) }}
+        >
+          {t('view.continueLatest')}
+        </button>
+        <div className="znac-view-histwrap" ref={histRef}>
+          <button
+            type="button"
+            className="znac-view-sbtn"
+            aria-expanded={histOpen}
+            onClick={() => { if (histOpen) setHistOpen(false); else loadHistory() }}
+          >
+            {t('view.history')} ▾
+          </button>
+          {histOpen && (
+            <div className="znac-view-hist" role="menu" aria-label={t('view.history')}>
+              {histState === 'loading' && <div className="znac-view-hist-empty">{t('view.historyLoading')}</div>}
+              {histState === 'failed' && <div className="znac-view-hist-empty">{t('view.historyFailed')}</div>}
+              {histState === 'ready' && histItems.length === 0 && <div className="znac-view-hist-empty">{t('view.historyEmpty')}</div>}
+              {histState === 'ready' && histItems.map((item: CliSessionEntry) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="menuitem"
+                  className="znac-view-hist-item"
+                  onClick={() => { runAction({ mode: 'resume', resumeTarget: item.id }, `${t('view.labelResume')} ${shortId(item.id)}`) }}
+                >
+                  <span className="znac-view-hist-summary">{item.summary}</span>
+                  <span className="znac-view-hist-meta">{item.updatedAt}</span>
+                  <span className="znac-view-hist-id">{shortId(item.id)}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        <span className="znac-view-seslabel">
+          {session?.lastAction !== undefined
+            ? session.lastAction.label
+            : state !== undefined && state.phase !== 'connecting' ? t('view.labelAttach') : ''}
+        </span>
+      </div>
+      <EmbeddedTerminal
+        session={session}
+        displayName={displayName}
+        launchingLabel={t('view.launching')}
+        exitedLabel={t('view.exited')}
+        errorLabel={t('view.error')}
+        restartLabel={t('view.restart')}
+      />
+    </div>
+  )
+}
+
+/** 内嵌终端：DOM 挂载 + 状态订阅；会话对象由 SessionArea 持有并传入。 */
+function EmbeddedTerminal(props: {
+  session: AgentTerminalSession | null
   displayName: string
   launchingLabel: string
   exitedLabel: string
   errorLabel: string
   restartLabel: string
-  noServiceLabel: string
 }): React.ReactElement {
-  const { agentId, sessionKey, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel, noServiceLabel } = props
-  const [session, setSession] = useState<AgentTerminalSession | null>(null)
+  const { session, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel } = props
   const scheme = useColorScheme()
-
-  useEffect(() => {
-    setSession(acquireSession(agentId, sessionKey))
-  }, [agentId, sessionKey])
 
   const state = useSyncExternalStore(
     useMemo(() => (callback: () => void) => session?.subscribe(callback) ?? (() => {}), [session]),
@@ -170,7 +286,7 @@ function EmbeddedTerminal(props: {
     return () => { session.detach() }
   }, [session, scheme])
 
-  if (session === null) return <p className="znac-view-empty">{noServiceLabel}</p>
+  if (session === null) return <p className="znac-view-empty">{launchingLabel}</p>
   if (state === undefined || state.phase === 'connecting') {
     return <p className="znac-view-empty">{launchingLabel}</p>
   }

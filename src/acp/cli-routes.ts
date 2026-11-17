@@ -19,6 +19,7 @@ import {
   type SseResponse,
   type TerminalStatus,
 } from './cli-terminal.ts'
+import { buildLaunchPlan, listAgentSessions, type SessionMode } from './cli-sessions.ts'
 
 /** 插件路由防误触头（照参考插件的静态头约定）。 */
 export const GUARD_HEADER = 'x-zn-agent-client'
@@ -30,6 +31,7 @@ export const ROUTES = {
   stream: '/api/zn-agent-client/stream',
   input: '/api/zn-agent-client/input',
   close: '/api/zn-agent-client/close',
+  sessions: '/api/zn-agent-client/sessions',
 } as const
 
 /** 宿主 webServer 服务的结构面（dsh-host-webserver）。 */
@@ -131,6 +133,9 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     const fromSession = typeof body.session === 'string' && body.session !== ''
       ? options.resolveSessionCwd?.(body.session)
       : undefined
+    const rawMode = typeof body.mode === 'string' ? (body.mode as SessionMode) : 'attach'
+    const mode: SessionMode = rawMode === 'new' || rawMode === 'continue' || rawMode === 'resume' ? rawMode : 'attach'
+    const plan = buildLaunchPlan(agent, mode, typeof body.resumeTarget === 'string' ? body.resumeTarget : undefined)
     try {
       const term = await controller.openTerminal({
         id: agent.id,
@@ -142,6 +147,8 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
         rows: body.rows,
         restart: body.restart === true,
         resume: body.resume === true,
+        mode: plan.mode,
+        ...(plan.launchLine !== undefined ? { launchLine: plan.launchLine } : {}),
       })
       return void json(res, 200, ok({
         info: term.status,
@@ -224,12 +231,33 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     return void json(res, 200, ok({ terminals: serializeStatuses(controller.listStatus()) }))
   }
 
+  /** 历史▾ 的数据源：agent × 工作目录下的历史会话列表。 */
+  async function sessions(req: RouteRequest, res: RouteResponse): Promise<void> {
+    if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
+    const body = await readJsonBody(req)
+    if (body === null) return void fail(res, 400, 'invalid body')
+    const agentId = typeof body.id === 'string' ? body.id.trim() : ''
+    if (agentId === '') return void fail(res, 400, 'missing agent id')
+    const agent = resolveAgent(agentId)
+    if (agent === null) return void fail(res, 404, `未找到入口：${agentId}`)
+    const cwd = typeof body.session === 'string' && body.session !== ''
+      ? options.resolveSessionCwd?.(body.session) ?? options.defaultCwd()
+      : options.defaultCwd()
+    try {
+      const found = await listAgentSessions(agent, cwd)
+      return void json(res, 200, ok({ sessions: found, cwd }))
+    } catch (error) {
+      return void fail(res, 500, error instanceof Error ? error.message : String(error))
+    }
+  }
+
   return [
     { path: ROUTES.state, method: 'POST', handler: state },
     { path: ROUTES.open, method: 'POST', handler: openTerminal },
     { path: ROUTES.stream, method: 'POST', handler: stream },
     { path: ROUTES.input, method: 'POST', handler: input },
     { path: ROUTES.close, method: 'POST', handler: closeTerminal },
+    { path: ROUTES.sessions, method: 'POST', handler: sessions },
   ]
 }
 
@@ -242,6 +270,7 @@ export function serializeStatuses(statuses: Record<string, TerminalStatus>): Rec
       agentId: status.agentId,
       displayName: status.displayName,
       command: status.command,
+      launch: status.launch,
       cwd: status.cwd,
       cols: status.cols,
       rows: status.rows,

@@ -19,7 +19,22 @@ import { WebglAddon } from '@xterm/addon-webgl'
 const OPEN_URL = '/api/zn-agent-client/open'
 const STREAM_URL = '/api/zn-agent-client/stream'
 const INPUT_URL = '/api/zn-agent-client/input'
+const SESSIONS_URL = '/api/zn-agent-client/sessions'
 const GUARD = { 'x-zn-agent-client': '1', 'content-type': 'application/json' } as const
+
+/** 历史会话条目（宿主 cli-sessions.ts 的 CliSessionEntry 同构）。 */
+export interface CliSessionEntry {
+  readonly id: string
+  readonly summary: string
+  readonly updatedAt: string
+  readonly source: 'cli' | 'index'
+}
+
+/** 会话动作（新会话/继续最近/还原指定会话）。 */
+export type SessionAction =
+  | { readonly mode: 'new' }
+  | { readonly mode: 'continue' }
+  | { readonly mode: 'resume'; readonly resumeTarget: string }
 
 /** 服务端环境上限（snapshot 帧里的 environment 同构）。 */
 interface TermEnvironment {
@@ -37,6 +52,7 @@ interface TermInfo {
   agentId: string
   displayName: string
   command: string
+  launch: string
   cwd: string
   cols: number
   rows: number
@@ -259,7 +275,11 @@ export class AgentTerminalSession {
   /* ---------------- 传输 ---------------- */
 
   /** 打开（幂等）并接入 SSE 流；进程已在跑时服务端直接回快照。 */
-  async connect(options: { restart?: boolean } = {}): Promise<void> {
+  async connect(options: {
+    restart?: boolean
+    mode?: 'attach' | 'new' | 'continue' | 'resume'
+    resumeTarget?: string
+  } = {}): Promise<void> {
     if (this.disposed) return
     const dims = this.currentDimensions()
     try {
@@ -272,6 +292,8 @@ export class AgentTerminalSession {
           cols: dims?.cols,
           rows: dims?.rows,
           restart: options.restart === true,
+          mode: options.mode,
+          resumeTarget: options.resumeTarget,
         }),
       })
       if (!opened.ok) {
@@ -284,6 +306,24 @@ export class AgentTerminalSession {
       this.publish({ phase: 'exited', error: error instanceof Error ? error.message : String(error) })
     }
   }
+
+  /**
+   * 会话动作入口（方案C 控件条）：新会话 / 继续最近 / 还原指定会话。
+   * 服务端会退掉正在跑的 TUI、重新拉起登录 shell 并敲对应命令行。
+   */
+  async openSession(action: SessionAction, label: string): Promise<void> {
+    if (this.disposed) return
+    this.publish({ phase: 'connecting', error: '' })
+    this.lastAction = { ...action, label }
+    await this.connect(
+      action.mode === 'resume'
+        ? { restart: true, mode: 'resume', resumeTarget: action.resumeTarget }
+        : { restart: true, mode: action.mode },
+    )
+  }
+
+  /** 最近一次会话动作（用于控件条的当前会话展示；attach 会话为空）。 */
+  lastAction: { readonly mode: 'new' | 'continue' | 'resume'; readonly resumeTarget?: string; readonly label: string } | undefined
 
   private currentDimensions(): { cols: number; rows: number } | undefined {
     const host = this.host
@@ -469,4 +509,16 @@ export function acquireSession(agentId: string, sessionKey = ''): AgentTerminalS
 export function disposeAllSessions(): void {
   for (const session of sessions.values()) session.dispose()
   sessions.clear()
+}
+
+/** 拉取某 agent 在当前工作区下的历史会话（历史▾ 菜单数据源）。 */
+export async function listSessions(agentId: string, sessionKey: string): Promise<CliSessionEntry[]> {
+  const response = await fetch(SESSIONS_URL, {
+    method: 'POST',
+    headers: { ...GUARD },
+    body: JSON.stringify({ id: agentId, session: sessionKey }),
+  })
+  if (!response.ok) throw new Error(`sessions ${response.status}`)
+  const payload = (await response.json()) as { ok?: boolean; sessions?: CliSessionEntry[] }
+  return Array.isArray(payload.sessions) ? payload.sessions : []
 }
