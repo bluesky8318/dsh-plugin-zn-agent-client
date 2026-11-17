@@ -12,7 +12,7 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
-import { acquireSession, listSessions, type AgentTerminalSession, type CliSessionEntry } from './agent-stream.ts'
+import { acquireSession, fetchStates, listSessions, type AgentTerminalSession, type CliSessionEntry } from './agent-stream.ts'
 import { readAgents } from './shell-overlay.tsx'
 import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
@@ -70,10 +70,6 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  // 在外部终端打开（特性探测：远端挂载失败时按钮不出现）。
-  const externalOpener = getExternalOpener()
-  const [externalState, setExternalState] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle')
-
   const targets = useMemo<TermTarget[]>(() => agents.map((agent: AgentEntry) => ({
     id: agent.id,
     displayName: agent.displayName,
@@ -85,40 +81,6 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
 
   return (
     <div className="znac-view">
-      <div className="znac-view-chips" role="tablist" aria-label={t('view.label')}>
-        {targets.map((target: TermTarget) => (
-          <button
-            key={target.id}
-            type="button"
-            role="tab"
-            aria-selected={target.id === active?.id}
-            className="znac-view-chip"
-            data-active={target.id === active?.id}
-            onClick={() => { setSelectedId(target.id) }}
-          >
-            {target.displayName}
-          </button>
-        ))}
-        {externalOpener !== undefined && active !== undefined && (
-          <button
-            type="button"
-            className="znac-view-external"
-            data-state={externalState}
-            disabled={externalState === 'opening'}
-            aria-label={t('view.externalOpen')}
-            onClick={() => {
-              const open = getExternalOpener()
-              if (open === undefined || active === undefined) return
-              setExternalState('opening')
-              void open(sessionId, active.id).then((result) => {
-                setExternalState(result?.opened === true ? 'opened' : 'failed')
-              }).catch(() => { setExternalState('failed') })
-            }}
-          >
-            {t(externalState === 'opening' ? 'view.externalOpening' : externalState === 'opened' ? 'view.externalOpened' : externalState === 'failed' ? 'view.externalFailed' : 'view.externalOpen')}
-          </button>
-        )}
-      </div>
       {active !== undefined && (
         <SessionArea
           key={active.id}
@@ -126,20 +88,26 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
           sessionId={sessionId}
           displayName={active.displayName}
           t={t}
+          targets={targets}
+          selectedId={active.id}
+          onSelect={(id) => { setSelectedId(id) }}
         />
       )}
     </div>
   )
 }
 
-/** 方案C 会话区：会话控件条（新会话/继续最近/历史▾）+ 内嵌终端。 */
+/** 方案C+ 会话区：agent 下拉（运行状态点）+ 会话控件条（新会话/继续最近/历史▾）+ 内嵌终端。 */
 function SessionArea(props: {
   agentId: string
   sessionId: string
   displayName: string
   t: (key: never) => string
+  targets: readonly TermTarget[]
+  selectedId: string
+  onSelect: (agentId: string) => void
 }): React.ReactElement {
-  const { agentId, sessionId, displayName } = props
+  const { agentId, sessionId, displayName, targets, selectedId, onSelect } = props
   // t 的键类型由 LocaleNamespaceMap 推导，运行时只是查表函数。
   const t = props.t as (key: string) => string
   const [session, setSession] = useState<AgentTerminalSession | null>(null)
@@ -147,27 +115,50 @@ function SessionArea(props: {
   const [histState, setHistState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
   const [histItems, setHistItems] = useState<readonly CliSessionEntry[]>([])
   const histRef = useRef<HTMLDivElement | null>(null)
+  const [agentStates, setAgentStates] = useState<Record<string, string>>({})
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const pickerRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     setSession(acquireSession(agentId, sessionId))
   }, [agentId, sessionId])
 
-  // 历史菜单打开时点外部/按 Esc 都关闭（与 ACP 弹框同一套交互约定）。
+  // 轮询 /state：绿点=有实例运行，红点=无实例（含退出）。切 agent 不停轮询，
+  // 让下拉列表里的其它 agent 状态保持新鲜（视图卸载才停）。
   useEffect(() => {
-    if (!histOpen) return
-    const onDown = (event: MouseEvent): void => {
-      if (histRef.current !== null && event.target instanceof Node && !histRef.current.contains(event.target)) {
-        setHistOpen(false)
-      }
+    let alive = true
+    const poll = (): void => {
+      void fetchStates().then((terminals) => {
+        if (!alive) return
+        const next: Record<string, string> = {}
+        for (const [id, status] of Object.entries(terminals)) next[id] = status.state
+        setAgentStates(next)
+      }).catch(() => { /* 轮询失败保持上次状态 */ })
     }
-    const onKey = (event: KeyboardEvent): void => { if (event.key === 'Escape') setHistOpen(false) }
+    poll()
+    const timer = window.setInterval(poll, 4000)
+    return () => { alive = false; window.clearInterval(timer) }
+  }, [])
+
+  // 历史菜单/agent 下拉打开时点外部/按 Esc 都关闭（与 ACP 弹框同一套交互约定）。
+  useEffect(() => {
+    if (!histOpen && !pickerOpen) return
+    const onDown = (event: MouseEvent): void => {
+      const node = event.target
+      if (!(node instanceof Node)) return
+      if (histOpen && histRef.current !== null && !histRef.current.contains(node)) setHistOpen(false)
+      if (pickerOpen && pickerRef.current !== null && !pickerRef.current.contains(node)) setPickerOpen(false)
+    }
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') { setHistOpen(false); setPickerOpen(false) }
+    }
     document.addEventListener('mousedown', onDown)
     document.addEventListener('keydown', onKey)
     return () => {
       document.removeEventListener('mousedown', onDown)
       document.removeEventListener('keydown', onKey)
     }
-  }, [histOpen])
+  }, [histOpen, pickerOpen])
 
   const state = useSyncExternalStore(
     useMemo(() => (callback: () => void) => session?.subscribe(callback) ?? (() => {}), [session]),
@@ -190,10 +181,23 @@ function SessionArea(props: {
   }
 
   const shortId = (id: string): string => id.length > 8 ? id.slice(0, 8) : id
+  // 在外部终端打开（特性探测：远端挂载失败时按钮不出现）。
+  const externalOpener = getExternalOpener()
+  const [externalState, setExternalState] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle')
 
   return (
     <div className="znac-view-sesarea">
       <div className="znac-view-sesbar" role="toolbar" aria-label={t('view.sessions')}>
+        <AgentDropdown
+          targets={targets}
+          selectedId={selectedId}
+          states={agentStates}
+          pickerOpen={pickerOpen}
+          setPickerOpen={setPickerOpen}
+          pickerRef={pickerRef}
+          onSelect={(id) => { setPickerOpen(false); onSelect(id) }}
+          t={t}
+        />
         <button
           type="button"
           className="znac-view-sbtn"
@@ -241,6 +245,25 @@ function SessionArea(props: {
             </div>
           )}
         </div>
+        {externalOpener !== undefined && (
+          <button
+            type="button"
+            className="znac-view-external"
+            data-state={externalState}
+            disabled={externalState === 'opening'}
+            aria-label={t('view.externalOpen')}
+            onClick={() => {
+              const open = getExternalOpener()
+              if (open === undefined) return
+              setExternalState('opening')
+              void open(sessionId, agentId).then((result) => {
+                setExternalState(result?.opened === true ? 'opened' : 'failed')
+              }).catch(() => { setExternalState('failed') })
+            }}
+          >
+            {t(externalState === 'opening' ? 'view.externalOpening' : externalState === 'opened' ? 'view.externalOpened' : externalState === 'failed' ? 'view.externalFailed' : 'view.externalOpen')}
+          </button>
+        )}
         <span className="znac-view-seslabel">
           {session?.lastAction !== undefined
             ? session.lastAction.label
@@ -255,6 +278,55 @@ function SessionArea(props: {
         errorLabel={t('view.error')}
         restartLabel={t('view.restart')}
       />
+    </div>
+  )
+}
+
+/** agent 下拉按钮 + 菜单：绿点=实例运行中，红点=无实例。切换不杀其它 agent 的会话。 */
+function AgentDropdown(props: {
+  targets: readonly TermTarget[]
+  selectedId: string
+  states: Record<string, string>
+  pickerOpen: boolean
+  setPickerOpen: (open: boolean) => void
+  pickerRef: React.RefObject<HTMLDivElement | null>
+  onSelect: (agentId: string) => void
+  t: (key: string) => string
+}): React.ReactElement {
+  const { targets, selectedId, states, pickerOpen, setPickerOpen, pickerRef, onSelect, t } = props
+  const active = targets.find((target: TermTarget) => target.id === selectedId)
+  const dotFor = (id: string): string => states[id] === 'running' ? 'running' : 'none'
+  return (
+    <div className="znac-view-agentwrap" ref={pickerRef as React.RefObject<HTMLDivElement>}>
+      <button
+        type="button"
+        className="znac-view-agentbtn"
+        aria-haspopup="menu"
+        aria-expanded={pickerOpen}
+        aria-label={t('view.agentPicker')}
+        onClick={() => { setPickerOpen(!pickerOpen) }}
+      >
+        <span className="znac-view-dot" data-state={active === undefined ? 'none' : dotFor(active.id)} />
+        {active?.displayName ?? ''}
+        <span className="znac-view-caret">▾</span>
+      </button>
+      {pickerOpen && (
+        <div className="znac-view-agentmenu" role="menu" aria-label={t('view.agentPicker')}>
+          {targets.map((target: TermTarget) => (
+            <button
+              key={target.id}
+              type="button"
+              role="menuitem"
+              className="znac-view-agentitem"
+              data-active={target.id === selectedId}
+              onClick={() => { onSelect(target.id) }}
+            >
+              <span className="znac-view-dot" data-state={dotFor(target.id)} />
+              <span className="znac-view-agentname">{target.displayName}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

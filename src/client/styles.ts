@@ -590,6 +590,45 @@ const CSS = `
   line-height: normal;
   visibility: hidden;
 }
+/* agent 下拉 + 运行状态圆点 */
+.znac-view-agentwrap { position: relative; display: inline-flex; }
+.znac-view-agentbtn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-primary);
+  padding: 4px 10px;
+  font-size: 12px; line-height: 1.3; font-weight: 500;
+  cursor: pointer;
+}
+.znac-view-agentbtn:hover { border-color: var(--dsw-alias-border-l4); }
+.znac-view-caret { color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 1.3; }
+.znac-view-dot {
+  width: 7px; height: 7px; border-radius: 999px; flex: none;
+  corner-shape: round;
+  background: var(--dsw-alias-state-error-primary);
+}
+.znac-view-dot[data-state='running'] { background: var(--dsw-alias-state-success-primary); }
+.znac-view-agentmenu {
+  position: absolute; top: calc(100% + 4px); left: 0; z-index: 40;
+  min-width: 200px; max-height: 320px; overflow-y: auto;
+  background: var(--dsw-alias-bg-layer-2);
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: 10px;
+  padding: 4px;
+}
+.znac-view-agentitem {
+  display: flex; align-items: center; gap: 8px; width: 100%;
+  border: 0; background: transparent; text-align: left;
+  color: var(--dsw-alias-label-primary);
+  padding: 6px 10px; border-radius: 7px;
+  font-size: 12px; line-height: 1.3; cursor: pointer;
+}
+.znac-view-agentitem:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-view-agentitem[data-active='true'] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary); }
+.znac-view-agentname { flex: 1; }
+
 `
 
 /** 注入本插件的样式节点；返回清理函数，插件停用时移除样式。 */

@@ -19,6 +19,7 @@ import { WebglAddon } from '@xterm/addon-webgl'
 const OPEN_URL = '/api/zn-agent-client/open'
 const STREAM_URL = '/api/zn-agent-client/stream'
 const INPUT_URL = '/api/zn-agent-client/input'
+const STATE_URL = '/api/zn-agent-client/state'
 const SESSIONS_URL = '/api/zn-agent-client/sessions'
 const GUARD = { 'x-zn-agent-client': '1', 'content-type': 'application/json' } as const
 
@@ -521,4 +522,17 @@ export async function listSessions(agentId: string, sessionKey: string): Promise
   if (!response.ok) throw new Error(`sessions ${response.status}`)
   const payload = (await response.json()) as { ok?: boolean; sessions?: CliSessionEntry[] }
   return Array.isArray(payload.sessions) ? payload.sessions : []
+}
+
+/** 轮询宿主 /state：agentId → {state}，驱动下拉列表的运行状态圆点。 */
+export async function fetchStates(): Promise<Record<string, { state: string }>> {
+  const response = await fetch(STATE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-zn-agent-client': '1' },
+    body: '{}',
+  })
+  if (!response.ok) throw new Error(`state ${String(response.status)}`)
+  const payload = (await response.json()) as { ok?: boolean; terminals?: Record<string, { state: string }> }
+  if (payload.ok !== true || payload.terminals === undefined) throw new Error('state unavailable')
+  return payload.terminals
 }

@@ -35,6 +35,7 @@ export type ZnAgentClientLocaleKey =
   | 'view.sessions' | 'view.newSession' | 'view.continueLatest' | 'view.history'
   | 'view.historyLoading' | 'view.historyFailed' | 'view.historyEmpty'
   | 'view.labelAttach' | 'view.labelNew' | 'view.labelContinue' | 'view.labelResume'
+  | 'view.agentPicker'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
 
 /** 英文文案。 */
@@ -101,6 +102,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelNew': 'New session',
   'view.labelContinue': 'Continued latest',
   'view.labelResume': 'Resumed',
+  'view.agentPicker': '选择 CLI agent',
   'view.externalOpen': 'Open in external terminal',
   'view.externalOpening': 'Opening…',
   'view.externalOpened': 'Opened',
@@ -172,6 +174,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelContinue': '已延续最近会话',
   'view.labelResume': '已还原',
   'view.externalOpen': '在外部终端打开',
+  'view.agentPicker': '选择 CLI agent',
   'view.externalOpening': '正在打开…',
   'view.externalOpened': '已打开',
   'view.externalFailed': '打开失败',
