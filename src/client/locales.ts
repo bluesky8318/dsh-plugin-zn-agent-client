@@ -35,7 +35,8 @@ export type ZnAgentClientLocaleKey =
   | 'view.sessions' | 'view.newSession' | 'view.continueLatest' | 'view.history'
   | 'view.historyLoading' | 'view.historyFailed' | 'view.historyEmpty'
   | 'view.labelAttach' | 'view.labelNew' | 'view.labelContinue' | 'view.labelResume'
-  | 'view.agentPicker'
+  | 'view.agentPicker' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
+  | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
 
 /** 英文文案。 */
@@ -102,6 +103,11 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelContinue': 'Continued latest',
   'view.labelResume': 'Resumed',
   'view.agentPicker': '选择 CLI agent',
+  'view.sessionLabel': '会话',
+  'view.currentSession': '当前会话',
+  'view.workspace': '工作区',
+  'view.switchedTo': '已切换到 ',
+  'view.newCreated': '新会话已创建',
   'view.externalOpen': 'Open in external terminal',
   'view.externalOpening': 'Opening…',
   'view.externalOpened': 'Opened',
@@ -173,6 +179,11 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelResume': '已还原',
   'view.externalOpen': '在外部终端打开',
   'view.agentPicker': '选择 CLI agent',
+  'view.sessionLabel': '会话',
+  'view.currentSession': '当前会话',
+  'view.workspace': '工作区',
+  'view.switchedTo': '已切换到 ',
+  'view.newCreated': '新会话已创建',
   'view.externalOpening': '正在打开…',
   'view.externalOpened': '已打开',
   'view.externalFailed': '打开失败',

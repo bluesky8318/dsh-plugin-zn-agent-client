@@ -177,17 +177,32 @@ function SessionArea(props: {
 
   const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
     setHistOpen(false)
+    showToast(action.mode === 'new' ? t('view.newCreated') : label)
     void session?.openSession(action, label)
   }
 
   const shortId = (id: string): string => id.length > 8 ? id.slice(0, 8) : id
+  const last = session?.lastAction
+  const curId = last?.resumeTarget !== undefined ? shortId(last.resumeTarget) : undefined
+  const statusText = last !== undefined
+    ? last.label
+    : state !== undefined && state.phase !== 'connecting' ? t('view.labelAttach') : ''
+  const cwd = state?.info?.cwd ?? ''
   // 在外部终端打开（特性探测：远端挂载失败时按钮不出现）。
   const externalOpener = getExternalOpener()
   const [externalState, setExternalState] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle')
+  // 操作反馈 toast（示意图方案C 的右下角轻提示，2.2s 自动消失）。
+  const [toast, setToast] = useState('')
+  const toastTimer = useRef<number | undefined>(undefined)
+  const showToast = (message: string): void => {
+    setToast(message)
+    window.clearTimeout(toastTimer.current)
+    toastTimer.current = window.setTimeout(() => { setToast('') }, 2200)
+  }
 
   return (
     <div className="znac-view-sesarea">
-      <div className="znac-view-sesbar" role="toolbar" aria-label={t('view.sessions')}>
+      <div className="znac-view-topbar" role="toolbar" aria-label={t('view.sessions')}>
         <AgentDropdown
           targets={targets}
           selectedId={selectedId}
@@ -195,9 +210,15 @@ function SessionArea(props: {
           pickerOpen={pickerOpen}
           setPickerOpen={setPickerOpen}
           pickerRef={pickerRef}
-          onSelect={(id) => { setPickerOpen(false); onSelect(id) }}
+          onSelect={(id) => {
+            setPickerOpen(false)
+            if (id !== selectedId) showToast(t('view.switchedTo') + (targets.find((target: TermTarget) => target.id === id)?.displayName ?? ''))
+            onSelect(id)
+          }}
           t={t}
         />
+        <span className="znac-view-spacer" />
+        <span className="znac-view-seslabel">{t('view.sessionLabel')}</span>
         <button
           type="button"
           className="znac-view-sbtn"
@@ -245,6 +266,12 @@ function SessionArea(props: {
             </div>
           )}
         </div>
+      </div>
+      <div className="znac-view-sesbar">
+        <span className="znac-view-seslabel">{t('view.currentSession')}</span>
+        <span className="znac-view-sesid">{curId ?? '—'}{statusText !== '' ? ` · ${statusText}` : ''}</span>
+        {cwd !== '' && <span className="znac-view-sescwd">{t('view.workspace')}: {cwd}</span>}
+        <span className="znac-view-spacer" />
         {externalOpener !== undefined && (
           <button
             type="button"
@@ -264,11 +291,6 @@ function SessionArea(props: {
             {t(externalState === 'opening' ? 'view.externalOpening' : externalState === 'opened' ? 'view.externalOpened' : externalState === 'failed' ? 'view.externalFailed' : 'view.externalOpen')}
           </button>
         )}
-        <span className="znac-view-seslabel">
-          {session?.lastAction !== undefined
-            ? session.lastAction.label
-            : state !== undefined && state.phase !== 'connecting' ? t('view.labelAttach') : ''}
-        </span>
       </div>
       <EmbeddedTerminal
         session={session}
@@ -278,6 +300,7 @@ function SessionArea(props: {
         errorLabel={t('view.error')}
         restartLabel={t('view.restart')}
       />
+      {toast !== '' && <div className="znac-view-toast" role="status">{toast}</div>}
     </div>
   )
 }

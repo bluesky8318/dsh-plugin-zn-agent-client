@@ -466,11 +466,47 @@ const CSS = `
   display: flex;
   flex-direction: column;
 }
+.znac-view-topbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 0.5px solid var(--dsw-alias-border-l4);
+}
 .znac-view-sesbar {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 6px 0;
+}
+.znac-view-spacer { flex: 1; }
+.znac-view-sesid {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  white-space: nowrap;
+}
+.znac-view-sescwd {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.znac-view-toast {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 14;
+  background: var(--dsw-alias-bg-layer-1);
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  padding: 5px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
 }
 .znac-view-sbtn {
   border: 0.5px solid var(--dsw-alias-border-l4);
@@ -537,7 +573,6 @@ const CSS = `
   white-space: nowrap;
 }
 .znac-view-seslabel {
-  margin-left: auto;
   color: var(--dsw-alias-label-tertiary);
   font-size: 12px;
   line-height: 1.5;
