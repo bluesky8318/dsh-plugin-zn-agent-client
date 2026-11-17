@@ -136,21 +136,24 @@ function formatTime(value: string): string {
   }, [agentId, sessionId])
 
   // 轮询 /state：绿点=有实例运行，红点=无实例（含退出）。切 agent 不停轮询，
-  // 让下拉列表里的其它 agent 状态保持新鲜（视图卸载才停）。
+  // 让下拉列表里的其它 agent 状态保持新鲜（视图卸载才停）。sessionKey 随
+  // sessionId 变化重建轮询：工作区 cwd 立刻跟随当前会话刷新。
+  const [workspaceCwd, setWorkspaceCwd] = useState('')
   useEffect(() => {
     let alive = true
     const poll = (): void => {
-      void fetchStates().then((terminals) => {
+      void fetchStates(sessionId).then(({ terminals, cwd }) => {
         if (!alive) return
         const next: Record<string, string> = {}
         for (const [id, status] of Object.entries(terminals)) next[id] = status.state
         setAgentStates(next)
+        if (cwd !== '') setWorkspaceCwd(cwd)
       }).catch(() => { /* 轮询失败保持上次状态 */ })
     }
     poll()
     const timer = window.setInterval(poll, 4000)
     return () => { alive = false; window.clearInterval(timer) }
-  }, [])
+  }, [sessionId])
 
   // 历史菜单/agent 下拉打开时点外部/按 Esc 都关闭（与 ACP 弹框同一套交互约定）。
   useEffect(() => {
@@ -232,7 +235,9 @@ function formatTime(value: string): string {
   const statusText = last !== undefined
     ? last.label
     : state !== undefined && state.phase !== 'connecting' ? t('view.labelAttach') : ''
-  const cwd = state?.info?.cwd ?? ''
+  // 工作区标签优先显示当前会话的工作区（/state 实时解析、跟随切换）；
+  // 拿不到时退回已挂载 PTY 实例的启动目录。
+  const cwd = workspaceCwd !== '' ? workspaceCwd : state?.info?.cwd ?? ''
   // 在外部终端打开（特性探测：远端挂载失败时按钮不出现）。
   const externalOpener = getExternalOpener()
   const [externalState, setExternalState] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle')

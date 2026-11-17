@@ -228,7 +228,12 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
 
   async function state(req: RouteRequest, res: RouteResponse): Promise<void> {
     if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
-    return void json(res, 200, ok({ terminals: serializeStatuses(controller.listStatus()) }))
+    // body 可选：带 session 时回传当前会话的工作区 cwd（视图的工作区标签跟随会话切换）。
+    const body = (await readJsonBody(req)) ?? {}
+    const cwd = typeof body.session === 'string' && body.session !== ''
+      ? options.resolveSessionCwd?.(body.session) ?? options.defaultCwd()
+      : options.defaultCwd()
+    return void json(res, 200, ok({ terminals: serializeStatuses(controller.listStatus()), cwd }))
   }
 
   const sessionListCache = new Map<string, { at: number; items: ReturnType<typeof listAgentSessions> extends Promise<infer T> ? T : never }>()

@@ -498,7 +498,9 @@ const sessions = new Map<string, AgentTerminalSession>()
 export function acquireSession(agentId: string, sessionKey = ''): AgentTerminalSession {
   const existing = sessions.get(agentId)
   if (existing !== undefined) {
-    if (sessionKey !== '' && existing.sessionKey === '') existing.sessionKey = sessionKey
+    // sessionKey 必须跟随当前会话：切到其它工作区的会话时更新 key，
+    // 否则后续 /open、/sessions 都按旧工作区解析 cwd（默认工作区不跟随的根因）。
+    if (sessionKey !== '') existing.sessionKey = sessionKey
     return existing
   }
   const session = new AgentTerminalSession(agentId, sessionKey)
@@ -524,15 +526,15 @@ export async function listSessions(agentId: string, sessionKey: string): Promise
   return Array.isArray(payload.sessions) ? payload.sessions : []
 }
 
-/** 轮询宿主 /state：agentId → {state}，驱动下拉列表的运行状态圆点。 */
-export async function fetchStates(): Promise<Record<string, { state: string }>> {
+/** 轮询宿主 /state：agentId → {state}，驱动下拉圆点；同时带回当前会话的工作区 cwd。 */
+export async function fetchStates(sessionKey = ''): Promise<{ terminals: Record<string, { state: string }>; cwd: string }> {
   const response = await fetch(STATE_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-zn-agent-client': '1' },
-    body: '{}',
+    body: JSON.stringify({ session: sessionKey }),
   })
   if (!response.ok) throw new Error(`state ${String(response.status)}`)
-  const payload = (await response.json()) as { ok?: boolean; terminals?: Record<string, { state: string }> }
+  const payload = (await response.json()) as { ok?: boolean; terminals?: Record<string, { state: string }>; cwd?: string }
   if (payload.ok !== true || payload.terminals === undefined) throw new Error('state unavailable')
-  return payload.terminals
+  return { terminals: payload.terminals, cwd: payload.cwd ?? '' }
 }
