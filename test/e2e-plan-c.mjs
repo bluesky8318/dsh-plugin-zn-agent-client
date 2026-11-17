@@ -69,17 +69,15 @@ function makeSubprocessFace() {
 const routes = new Map()
 const effects = []
 const ctx = {
+  reflect: { provide() {} }, // Service 基类（remote-service）需要
+  // 参考模式接线：宿主服务直接挂在 ctx 上（不再走 ctx.inject 回调）。
+  subprocess: makeSubprocessFace(),
+  webServer: { register(route) { routes.set(route.path, route); return () => {} } },
+  workingDirectory: { defaultDirectory: cwd, get() { return undefined } },
+  sessions: { get() { return undefined } },
   tools: { register() { return () => {} } },
   subagents: { registerProvider() { return () => {} } },
   inject(services, fn) {
-    if (services.includes('subprocess') && services.includes('webServer')) {
-      fn({
-        subprocess: makeSubprocessFace(),
-        webServer: { register(route) { routes.set(route.path, route); return () => {} } },
-        workingDirectory: { defaultDirectory: cwd },
-      })
-      return
-    }
     if (services.includes('commands')) fn({ commands: { register() { return () => {} } } })
   },
   effect(fn) { const cleanup = fn(); return typeof cleanup === 'function' ? cleanup : () => {} },
