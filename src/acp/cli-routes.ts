@@ -111,6 +111,8 @@ export interface CliRouteOptions {
   resolveAgent: (agentId: string) => AgentConfig | null
   /** 终端 cwd 为空时的默认目录（工作区目录）。 */
   defaultCwd: () => string
+  /** 会话 id → 该会话的工作目录（= 工作区根）；拿不到时回退 defaultCwd。 */
+  resolveSessionCwd?: (sessionId: string) => string | undefined
 }
 
 /** 组装五条路由定义（注册交给调用方走 ctx.effect）。 */
@@ -125,13 +127,17 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     if (agentId === '') return void fail(res, 400, 'missing agent id')
     const agent = resolveAgent(agentId)
     if (agent === null) return void fail(res, 404, `未找到入口：${agentId}`)
+    const requested = typeof body.cwd === 'string' && body.cwd !== '' ? body.cwd : undefined
+    const fromSession = typeof body.session === 'string' && body.session !== ''
+      ? options.resolveSessionCwd?.(body.session)
+      : undefined
     try {
       const term = await controller.openTerminal({
         id: agent.id,
         agentId: agent.id,
         displayName: agent.displayName,
         command: agent.command,
-        cwd: typeof body.cwd === 'string' && body.cwd !== '' ? body.cwd : options.defaultCwd(),
+        cwd: requested ?? fromSession ?? options.defaultCwd(),
         cols: body.cols,
         rows: body.rows,
         restart: body.restart === true,

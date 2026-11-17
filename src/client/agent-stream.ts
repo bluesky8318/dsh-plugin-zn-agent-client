@@ -113,12 +113,14 @@ export class AgentTerminalSession {
   readonly agentId: string
   private readonly listeners = new Set<() => void>()
   private snapshotState: SessionState = INITIAL_STATE
-  private readonly terminal: Terminal
-  private readonly fit: FitAddon
+  sessionKey: string
+  private terminal: Terminal | undefined
+  private fit: FitAddon | undefined
   private webgl: WebglAddon | undefined
   private container: HTMLElement | null = null
   private host: HTMLElement | null = null
-  private readonly element: HTMLElement
+  private element: HTMLElement = null as unknown as HTMLElement
+  private streamLive = false
   private controller: AbortController | undefined
   private reconnectTimer: ReturnType<typeof setTimeout> | undefined
   private disposed = false
@@ -126,14 +128,23 @@ export class AgentTerminalSession {
   private sendTimer: ReturnType<typeof setTimeout> | undefined
   private sendBuffer = ''
   private fitScheduled = false
-  private readonly observer: ResizeObserver | undefined
+  private observer: ResizeObserver | undefined
   private lastDimensions: ITerminalDimensions | undefined
 
-  constructor(agentId: string) {
+  constructor(agentId: string, sessionKey = '') {
     this.agentId = agentId
-    this.element = document.createElement('div')
-    this.element.className = 'znac-agent-term-screen'
-    this.terminal = new Terminal({
+    this.sessionKey = sessionKey
+    // xterm/WebGL 延迟到首次 attach 到可见容器才创建：在隐藏节点里初始化
+    // 渲染器会拿到 0x0 尺寸的 glyph atlas 与错误的 canvas 尺寸，首开就会
+    // 出现「横屏」（cols 远大于 rows）甚至黑屏。
+  }
+
+  /** 首次可见挂载时创建模拟器与渲染器；返回是否新创建。 */
+  private ensureTerminal(): boolean {
+    if (this.terminal !== undefined) return false
+    const element = document.createElement('div')
+    element.className = 'znac-agent-term-screen'
+    const terminal = new Terminal({
       fontFamily: TERMINAL_FONT_STACK,
       fontSize: 13,
       lineHeight: 1.0,
@@ -142,20 +153,18 @@ export class AgentTerminalSession {
       cursorBlink: true,
       scrollback: LOCAL_LIMITS.scrollback,
     })
-    this.fit = new FitAddon()
-    this.terminal.loadAddon(this.fit)
-    this.terminal.open(this.element)
+    const fit = new FitAddon()
+    terminal.loadAddon(fit)
+    terminal.open(element)
+    this.element = element
+    this.terminal = terminal
+    this.fit = fit
     this.attachWebgl()
-    // WebGL 首帧需要一次重排+刷新，否则打开时黑屏直到第一次输出。
-    requestAnimationFrame(() => {
-      try { this.fit.fit() } catch { /* 容器还没尺寸时忽略 */ }
-      this.webgl?.clearTextureAtlas()
-      this.terminal.refresh(0, this.terminal.rows - 1)
-    })
-    this.terminal.onData((data) => { this.send(data) })
+    terminal.onData((data) => { this.send(data) })
     if (typeof ResizeObserver !== 'undefined') {
       this.observer = new ResizeObserver(() => this.scheduleFit())
     }
+    return true
   }
 
   /* ---------------- 状态订阅（useSyncExternalStore 接口） ---------------- */
@@ -176,7 +185,8 @@ export class AgentTerminalSession {
 
   /** 挂到可见容器；会话被别的容器占用时先从那里摘下来。 */
   attach(host: HTMLElement): void {
-    if (this.host === host) return
+    if (this.host === host) { this.terminal?.focus(); return }
+    const fresh = this.ensureTerminal()
     this.host = host
     if (this.container !== null && this.element.parentElement === this.container) {
       this.container.removeChild(this.element)
@@ -185,7 +195,17 @@ export class AgentTerminalSession {
     this.container = host
     this.observer?.observe(host)
     this.scheduleFit()
-    this.terminal.focus()
+    if (fresh) {
+      // 新建的模拟器没有历史屏幕：重开传输拿一份新 snapshot 回放。
+      if (this.streamLive) {
+        this.publish({ phase: 'connecting' })
+        void this.openStream()
+      } else {
+        void this.connect()
+      }
+    }
+    this.syncTheme(host)
+    this.terminal?.focus()
   }
 
   /** 摘下并停进停车场（进程与屏幕保留）。 */
@@ -193,7 +213,7 @@ export class AgentTerminalSession {
     if (this.host !== null) this.observer?.unobserve(this.host)
     this.host = null
     this.container = null
-    if (parkingNode !== null) parkingNode.appendChild(this.element)
+    if (parkingNode !== null && this.element !== null) parkingNode.appendChild(this.element)
   }
 
   private attachWebgl(): void {
@@ -206,13 +226,13 @@ export class AgentTerminalSession {
         if (this.webgl === webgl) this.webgl = undefined
         this.attachWebgl()
         requestAnimationFrame(() => {
-          try { this.fit.fit() } catch { /* 忽略 */ }
+          try { this.fit?.fit() } catch { /* 忽略 */ }
           this.webgl?.clearTextureAtlas()
-          this.terminal.refresh(0, this.terminal.rows - 1)
+          this.terminal?.refresh(0, (this.terminal?.rows ?? 1) - 1)
         })
       })
       this.webgl = webgl
-      this.terminal.loadAddon(webgl)
+      this.terminal?.loadAddon(webgl)
     } catch {
       this.webgl = undefined // 无 WebGL2：保留默认 DOM 渲染
     }
@@ -225,6 +245,7 @@ export class AgentTerminalSession {
     const background = style.backgroundColor
     const foreground = style.color
     if (background === '' || foreground === '' || background === 'rgba(0, 0, 0, 0)') return
+    if (this.terminal === undefined) return
     this.terminal.options.theme = {
       background,
       foreground,
@@ -247,6 +268,7 @@ export class AgentTerminalSession {
         headers: { ...GUARD },
         body: JSON.stringify({
           id: this.agentId,
+          session: this.sessionKey,
           cols: dims?.cols,
           rows: dims?.rows,
           restart: options.restart === true,
@@ -265,15 +287,18 @@ export class AgentTerminalSession {
 
   private currentDimensions(): { cols: number; rows: number } | undefined {
     const host = this.host
-    if (host === null || host.clientWidth === 0 || host.clientHeight === 0) return undefined
+    if (host === null || this.terminal === undefined || this.fit === undefined) return undefined
+    if (host.clientWidth === 0 || host.clientHeight === 0) return undefined
     try { this.fit.fit() } catch { return undefined }
     return { cols: this.terminal.cols, rows: this.terminal.rows }
   }
 
   private async openStream(): Promise<void> {
+    if (this.terminal === undefined) return
     this.controller?.abort()
     const controller = new AbortController()
     this.controller = controller
+    this.streamLive = true
     const response = await fetch(STREAM_URL, {
       method: 'POST',
       headers: { ...GUARD },
@@ -300,6 +325,7 @@ export class AgentTerminalSession {
     } catch {
       // 主动断开（dispose/重连）会走 AbortError——静默即可。
     }
+    this.streamLive = false
     if (controller.signal.aborted || this.disposed) return
     if (this.snapshotState.phase !== 'exited') {
       this.publish({ phase: 'reconnecting', error: '连接中断' })
@@ -318,16 +344,18 @@ export class AgentTerminalSession {
   }
 
   private applyFrame(frame: StreamFrame): void {
+    const terminal = this.terminal
+    if (terminal === undefined) return
     if (frame.type === 'snapshot') {
       this.writable = frame.writable
-      this.terminal.reset()
-      this.terminal.resize(
+      terminal.reset()
+      terminal.resize(
         clampDimension(frame.info.cols, LOCAL_LIMITS.maxCols, 80),
         clampDimension(frame.info.rows, LOCAL_LIMITS.maxRows, 24),
       )
       // reset 会把 glyph atlas 映射清掉——重放前清一次纹理避免残影/黑屏。
       this.webgl?.clearTextureAtlas()
-      this.terminal.write(frame.screen)
+      terminal.write(frame.screen)
       this.publish({
         phase: frame.info.state === 'exited' ? 'exited' : 'live',
         writable: frame.writable,
@@ -336,7 +364,7 @@ export class AgentTerminalSession {
       })
       this.scheduleFit()
     } else if (frame.type === 'output') {
-      this.terminal.write(frame.data)
+      terminal.write(frame.data)
     } else {
       this.writable = frame.writable
       this.publish({
@@ -378,15 +406,17 @@ export class AgentTerminalSession {
 
   /** rAF 合并的拟合循环：本地 fit → resize 终端 → 上报服务端。 */
   private scheduleFit(): void {
-    if (this.fitScheduled || this.host === null) return
+    if (this.fitScheduled || this.host === null || this.terminal === undefined || this.fit === undefined) return
     this.fitScheduled = true
     requestAnimationFrame(() => {
       this.fitScheduled = false
       const host = this.host
-      if (this.disposed || host === null || !this.writable) return
+      const fit = this.fit
+      const terminal = this.terminal
+      if (this.disposed || host === null || fit === undefined || terminal === undefined || !this.writable) return
       if (host.clientWidth === 0 || host.clientHeight === 0) return
-      try { this.fit.fit() } catch { return }
-      const dims = { cols: this.terminal.cols, rows: this.terminal.rows }
+      try { fit.fit() } catch { return }
+      const dims = { cols: terminal.cols, rows: terminal.rows }
       const last = this.lastDimensions
       if (last !== undefined && last.cols === dims.cols && last.rows === dims.rows) return
       this.lastDimensions = dims
@@ -413,20 +443,25 @@ export class AgentTerminalSession {
     this.controller?.abort()
     this.observer?.disconnect()
     this.detach()
-    this.terminal.dispose()
+    this.terminal?.dispose()
+    this.terminal = undefined
+    this.fit = undefined
+    this.streamLive = false
   }
 }
 
 /** agentId → 会话注册表：进程与屏幕状态跨 React 挂载存活。 */
 const sessions = new Map<string, AgentTerminalSession>()
 
-/** 取（或建）一个 agent 的会话。 */
-export function acquireSession(agentId: string): AgentTerminalSession {
+/** 取（或建）一个 agent 的会话；sessionKey 用于宿主解析工作区目录。 */
+export function acquireSession(agentId: string, sessionKey = ''): AgentTerminalSession {
   const existing = sessions.get(agentId)
-  if (existing !== undefined) return existing
-  const session = new AgentTerminalSession(agentId)
+  if (existing !== undefined) {
+    if (sessionKey !== '' && existing.sessionKey === '') existing.sessionKey = sessionKey
+    return existing
+  }
+  const session = new AgentTerminalSession(agentId, sessionKey)
   sessions.set(agentId, session)
-  void session.connect()
   return session
 }
 

@@ -147,7 +147,7 @@ export function apply(ctx: Context, config: Config): void {
     const faces = inner as Context & {
       subprocess?: SubprocessFace
       webServer?: WebServerFace
-      workingDirectory?: { defaultDirectory?: string }
+      workingDirectory?: { defaultDirectory?: string; get?(sessionId: unknown): string | undefined }
     }
     const subprocess = faces.subprocess
     const webServer = faces.webServer
@@ -161,6 +161,7 @@ export function apply(ctx: Context, config: Config): void {
     for (const route of createCliTerminalRoutes(controller, {
       resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
       defaultCwd,
+      resolveSessionCwd: (sessionId: string) => faces.workingDirectory?.get?.(sessionId),
     })) {
       ctx.effect(() => {
         webServer.register({

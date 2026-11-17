@@ -123,6 +123,7 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
         <EmbeddedTerminal
           key={active.id}
           agentId={active.id}
+          sessionKey={sessionId}
           displayName={active.displayName}
           launchingLabel={t('view.launching')}
           exitedLabel={t('view.exited')}
@@ -138,6 +139,7 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
 /** 内嵌终端：会话按 agentId 全局复用，React 只挂 DOM + 订阅状态。 */
 function EmbeddedTerminal(props: {
   agentId: string
+  sessionKey: string
   displayName: string
   launchingLabel: string
   exitedLabel: string
@@ -145,13 +147,13 @@ function EmbeddedTerminal(props: {
   restartLabel: string
   noServiceLabel: string
 }): React.ReactElement {
-  const { agentId, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel, noServiceLabel } = props
+  const { agentId, sessionKey, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel, noServiceLabel } = props
   const [session, setSession] = useState<AgentTerminalSession | null>(null)
   const scheme = useColorScheme()
 
   useEffect(() => {
-    setSession(acquireSession(agentId))
-  }, [agentId])
+    setSession(acquireSession(agentId, sessionKey))
+  }, [agentId, sessionKey])
 
   const state = useSyncExternalStore(
     useMemo(() => (callback: () => void) => session?.subscribe(callback) ?? (() => {}), [session]),
