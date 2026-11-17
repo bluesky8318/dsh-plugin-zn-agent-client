@@ -125,6 +125,9 @@ function formatTime(value: string): string {
   const [histItems, setHistItems] = useState<readonly CliSessionEntry[]>([])
   const histRef = useRef<HTMLDivElement | null>(null)
   const [agentStates, setAgentStates] = useState<Record<string, string>>({})
+  // 显式启动记录：只有人点过「＋新会话/历史/继续」或实例确实在跑，才挂终端；
+  // 防止首次打开视图就静默 spawn 一个 PTY 新会话（会话膨胀的根源）。
+  const [launchedIds, setLaunchedIds] = useState<ReadonlySet<string>>(new Set())
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerRef = useRef<HTMLDivElement | null>(null)
 
@@ -218,6 +221,7 @@ function formatTime(value: string): string {
 
   const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
     setHistOpen(false)
+    setLaunchedIds((prev) => { const next = new Set(prev); next.add(agentId); return next })
     showToast(action.mode === 'new' ? t('view.newCreated') : label)
     void session?.openSession(action, label)
   }
@@ -327,6 +331,8 @@ function formatTime(value: string): string {
       </div>
       <EmbeddedTerminal
         session={session}
+        active={agentStates[agentId] === 'running' || launchedIds.has(agentId)}
+        idleHint={t('view.idleHint')}
         displayName={displayName}
         launchingLabel={t('view.launching')}
         exitedLabel={t('view.exited')}
@@ -390,13 +396,16 @@ function AgentDropdown(props: {
 /** 内嵌终端：DOM 挂载 + 状态订阅；会话对象由 SessionArea 持有并传入。 */
 function EmbeddedTerminal(props: {
   session: AgentTerminalSession | null
+  /** 实例在跑或人显式点过启动动作时才为 true——false 时只渲染空态，不连 /open。 */
+  active: boolean
+  idleHint: string
   displayName: string
   launchingLabel: string
   exitedLabel: string
   errorLabel: string
   restartLabel: string
 }): React.ReactElement {
-  const { session, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel } = props
+  const { session, active, idleHint, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel } = props
   const scheme = useColorScheme()
 
   const state = useSyncExternalStore(
@@ -407,16 +416,25 @@ function EmbeddedTerminal(props: {
   // DOM 挂载 + 主题同步（暗/亮切换时重读 token 颜色）。
   const hostRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
+    if (!active) return
     const node = hostRef.current
     if (session === null || node === null) return
     session.attach(node)
     session.syncTheme(node)
     return () => { session.detach() }
-  }, [session, scheme])
+  }, [session, scheme, active])
 
   // 连接中也要渲染终端容器：attach 才会创建 xterm（惰性），若整个容器被
   // 占位文案替代，snapshot 会因终端不存在而被丢弃——phase 永远停在
   // connecting（点开新会话一直「正在启动 CLI」的死锁根源）。
+  // 空态：实例没跑、人也没点过启动动作——不 spawn，等人在顶栏明确选择。
+  if (!active) {
+    return (
+      <div className="znac-view-idle" role="status">
+        <p>{idleHint}</p>
+      </div>
+    )
+  }
   if (session === null) return <p className="znac-view-empty">{launchingLabel}</p>
 
   return (

@@ -547,6 +547,23 @@ const CSS = `
   display: block;
   width: 320px;
 }
+.znac-view-idle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 0;
+}
+
+.znac-view-idle p {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+}
+
 .znac-view-switching {
   position: absolute;
   inset: 0;

@@ -36,7 +36,8 @@ export type ZnAgentClientLocaleKey =
   | 'view.sessions' | 'view.newSession' | 'view.history'
   | 'view.historyLoading' | 'view.historyFailed' | 'view.historyEmpty'
   | 'view.labelAttach' | 'view.labelNew' | 'view.labelResume'
-  | 'view.agentPicker' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
+  | 'view.agentPicker'
+  | 'view.idleHint' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
 
@@ -90,6 +91,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
   'view.noService': 'This deployment has no embedded-terminal service; use the /znacp command instead.',
   'view.launching': 'Starting the CLI…',
+  'view.idleHint': 'No instance running. Pick ＋New session or a History entry above to open one.',
   'view.exited': 'Session ended.',
   'view.error': 'Error',
   'view.restart': 'Restart',
@@ -164,6 +166,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
   'view.noService': '当前部署没有内嵌终端服务；请改用 /znacp 命令。',
   'view.launching': '正在启动 CLI…',
+  'view.idleHint': '当前没有运行中的实例。用上方「＋新会话」或「历史」选择要打开的会话。',
   'view.exited': '会话已结束。',
   'view.error': '错误',
   'view.restart': '重启',
