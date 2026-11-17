@@ -1,15 +1,14 @@
 /**
- * Agent 选择浮层：列出配置里的所有 agent，可复制 /znacp 命令或一键开 TUI。
+ * Agent 选择浮层：列出配置里的所有 agent，复制 /znacp 命令。
  *
- * 启动走 `webTerminals` 编排层（term-model.ts）——和主会话视图同一条路径，
- * 保证同一 contentId 下两个入口开的是同一个进程。
+ * 左下角锚定的小弹框（不是全屏遮罩）；不含开终端入口——终端走主会话
+ * 的 CLI Agent 视图，这里只做 ACP 相关（选 agent / 复制命令）。
  * @module dsh-plugin-zn-agent-client/client/shell-overlay
  */
 
 import React, { useCallback, useEffect, useState } from 'react'
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
-import { launchAgentEntry } from './term-model.ts'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
 import { ACP_COMMAND_BASE } from './constants.ts'
 
@@ -72,10 +71,9 @@ export function registerShellOverlay(ctx: Context, controller: ConfigFormControl
  * 浮层组件：监听 OPEN_LAUNCHER_EVENT 打开；点外部、Escape 或关闭按钮收起。
  */
 export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | null {
-  const { t, useTemplateConfig, pluginCtx } = props
+  const { t, useTemplateConfig } = props
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
-  const [launchState, setLaunchState] = useState<{ agentId: string; phase: 'opening' | 'failed'; message?: string } | null>(null)
 
   useEffect(() => {
     const onOpen = (): void => { setOpen(true) }
@@ -86,12 +84,7 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
   // 注入面的 hooks 舱位以 use<Name> 选择器钩子到达（见 InjectFace 契约）。
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
 
-  const close = useCallback(() => { setOpen(false); setLaunchState(null) }, [])
-
-  // 点浮层外关闭：根元素铺满 overlay 层，落点不在卡片内即收起。
-  const onRootMouseDown = useCallback((event: React.MouseEvent) => {
-    if (event.target === event.currentTarget) close()
-  }, [close])
+  const close = useCallback(() => { setOpen(false) }, [])
 
   useEffect(() => {
     if (!open) return
@@ -111,18 +104,9 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
     })
   }
 
-  const launch = (agent: AgentEntry): void => {
-    setLaunchState({ agentId: agent.id, phase: 'opening' })
-    void launchAgentEntry(pluginCtx, agent)
-      .then(() => { close() })
-      .catch(() => {
-        setLaunchState({ agentId: agent.id, phase: 'failed', message: t('launcher.terminalFailed') })
-      })
-  }
-
   return (
-    <div className="znac-overlay" onMouseDown={onRootMouseDown} role="presentation">
-      <div className="znac-launcher" role="dialog" aria-modal="true" aria-label={t('launcher.title')}>
+    <div className="znac-overlay znac-overlay-launcher" role="presentation">
+      <div className="znac-launcher" role="dialog" aria-label={t('launcher.title')}>
         <div className="znac-overlay-head">
           <span className="znac-launcher-title">{t('launcher.title')}</span>
           <button type="button" className="znac-overlay-close" aria-label={t('launcher.close')} onClick={close}>×</button>
@@ -142,13 +126,7 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
                   <button type="button" className="znac-launcher-copy" onClick={() => { copyCommand(agent) }}>
                     {copied === agent.id ? t('launcher.copied') : t('launcher.copy')}
                   </button>
-                  <button type="button" className="znac-launcher-open" onClick={() => { launch(agent) }}>
-                    {launchState?.agentId === agent.id && launchState?.phase === 'opening' ? t('launcher.terminalOpening') : t('launcher.terminal')}
-                  </button>
                 </div>
-                {launchState?.agentId === agent.id && launchState?.phase === 'failed' ? (
-                  <p className="znac-launcher-status" role="alert">{launchState.message ?? t('launcher.terminalFailed')}</p>
-                ) : null}
               </li>
             ))}
           </ul>

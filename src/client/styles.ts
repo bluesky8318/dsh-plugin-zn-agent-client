@@ -67,24 +67,22 @@ const CSS = `
 .znac-dot[data-on='true'] { background: var(--dsw-alias-state-success-primary); }
 
 /* ---- 帧级浮层（shell.overlay）----
-   根元素铺满屏幕作遮罩，卡片抬升：border: 0 + elevation-panel。 */
-.znac-overlay {
+   左下角锚定的小弹框（不是全屏遮罩）：border: 0 + elevation-panel 抬升。
+   只有浮层自己占一小块；不铺满屏幕，不影响宿主其它区域。 */
+.znac-overlay-launcher {
   position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--dsw-alias-bg-base);
-  opacity: 0.96;
+  left: 12px;
+  bottom: 56px;
+  z-index: 30;
 }
 .znac-launcher {
   display: flex;
   flex-direction: column;
   gap: 10px;
   box-sizing: border-box;
-  width: min(440px, calc(100vw - 32px));
-  max-height: min(520px, calc(100vh - 64px));
-  padding: 14px 16px;
+  width: min(320px, calc(100vw - 32px));
+  max-height: min(420px, calc(100vh - 120px));
+  padding: 12px 14px;
   border: 0;
   border-radius: var(--dsw-radius-lg);
   background: var(--dsw-alias-bg-layer-1);
@@ -183,18 +181,6 @@ const CSS = `
   flex: none;
   gap: 6px;
 }
-.znac-launcher-open {
-  flex: none;
-  padding: 4px 10px;
-  border: 0.5px solid var(--dsw-alias-border-l1);
-  border-radius: var(--dsw-radius-md);
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font-size: 12px;
-  line-height: 18px;
-  cursor: pointer;
-}
-.znac-launcher-open:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .znac-launcher-copy {
   flex: none;
   padding: 4px 10px;
