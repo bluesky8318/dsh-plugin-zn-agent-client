@@ -527,6 +527,9 @@ const CSS = `
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
+  /* Popover API 生效时（浏览器把节点渲染进顶层）改用固定定位坐标，
+   * 并覆盖 UA 的居中默认样式；不支持时保持上面的 absolute 回落。 */
+
   z-index: 12;
   min-width: 320px;
   max-width: 480px;
@@ -537,6 +540,40 @@ const CSS = `
   border-radius: var(--dsw-radius-md);
   padding: 4px;
 }
+.znac-view-hist[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  display: block;
+  width: 320px;
+}
+.znac-view-switching {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  z-index: 3;
+}
+.znac-view-spin {
+  width: 18px;
+  height: 18px;
+  /* 转圈是功能指示环，不是面板描边——用 longhand 免开 hairline 约束。 */
+  border-width: 2px;
+  border-style: solid;
+  border-color: var(--dsw-alias-border-l4);
+  border-top-color: var(--dsw-alias-interactive-bg-hover);
+  border-radius: 50%;
+  corner-shape: round;
+  animation: znac-spin 0.8s linear infinite;
+}
+@keyframes znac-spin { to { transform: rotate(360deg); } }
 .znac-view-hist-empty {
   padding: 8px 10px;
   color: var(--dsw-alias-label-tertiary);

@@ -231,6 +231,8 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     return void json(res, 200, ok({ terminals: serializeStatuses(controller.listStatus()) }))
   }
 
+  const sessionListCache = new Map<string, { at: number; items: ReturnType<typeof listAgentSessions> extends Promise<infer T> ? T : never }>()
+
   /** 历史▾ 的数据源：agent × 工作目录下的历史会话列表。 */
   async function sessions(req: RouteRequest, res: RouteResponse): Promise<void> {
     if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
@@ -243,8 +245,22 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     const cwd = typeof body.session === 'string' && body.session !== ''
       ? options.resolveSessionCwd?.(body.session) ?? options.defaultCwd()
       : options.defaultCwd()
+    // 会话列表缓存（10s 内直接回缓存；过期先回旧值再后台刷新——
+    // 枚举要 stat/读会话文件，历史弹层必须秒开）。
+    const cacheKey = `${agentId}\n${cwd}`
+    const cached = sessionListCache.get(cacheKey)
+    if (cached !== undefined && Date.now() - cached.at < 10_000) {
+      return void json(res, 200, ok({ sessions: cached.items, cwd }))
+    }
+    if (cached !== undefined) {
+      void listAgentSessions(agent, cwd).then((items) => {
+        sessionListCache.set(cacheKey, { at: Date.now(), items })
+      }).catch(() => { /* 后台刷新失败保旧值 */ })
+      return void json(res, 200, ok({ sessions: cached.items, cwd }))
+    }
     try {
       const found = await listAgentSessions(agent, cwd)
+      sessionListCache.set(cacheKey, { at: Date.now(), items: found })
       return void json(res, 200, ok({ sessions: found, cwd }))
     } catch (error) {
       return void fail(res, 500, error instanceof Error ? error.message : String(error))

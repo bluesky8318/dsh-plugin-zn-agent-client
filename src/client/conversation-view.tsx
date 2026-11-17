@@ -175,6 +175,38 @@ function SessionArea(props: {
     }).catch(() => { setHistState('failed') })
   }
 
+  // 历史弹层用 Popover API 渲染到顶层：会话视图所在 tab 面板有 overflow 裁剪，
+  // absolute 弹层会被截断（见过 「Qoder CL…」 被切）。不支持时回落 absolute 定位。
+  const histPopRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const el = histPopRef.current
+    if (el === null) return
+    if (!histOpen) {
+      if (typeof el.hidePopover === 'function') { try { el.hidePopover() } catch { /* 本来就没开 */ } }
+      return
+    }
+    el.setAttribute('popover', 'manual')
+    if (typeof el.showPopover !== 'function') return
+    const position = (): void => {
+      const btn = histRef.current?.querySelector('button')
+      const rect = btn?.getBoundingClientRect()
+      if (rect === undefined) return
+      const width = Math.max(320, Math.min(480, Math.round(rect.width) + 40))
+      el.style.width = `${width}px`
+      el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - width - 8))}px`
+      el.style.top = `${rect.bottom + 4}px`
+    }
+    position()
+    try { el.showPopover() } catch { /* 重复打开等情况忽略 */ }
+    window.addEventListener('resize', position)
+    window.addEventListener('scroll', position, true)
+    return () => {
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', position, true)
+      try { el.hidePopover() } catch { /* 本来就没开 */ }
+    }
+  }, [histOpen])
+
   const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
     setHistOpen(false)
     showToast(action.mode === 'new' ? t('view.newCreated') : label)
@@ -238,7 +270,7 @@ function SessionArea(props: {
             {t('view.history')} ▾
           </button>
           {histOpen && (
-            <div className="znac-view-hist" role="menu" aria-label={t('view.history')}>
+            <div className="znac-view-hist" role="menu" aria-label={t('view.history')} ref={histPopRef}>
               {histState === 'loading' && <div className="znac-view-hist-empty">{t('view.historyLoading')}</div>}
               {histState === 'failed' && <div className="znac-view-hist-empty">{t('view.historyFailed')}</div>}
               {histState === 'ready' && histItems.length === 0 && <div className="znac-view-hist-empty">{t('view.historyEmpty')}</div>}
@@ -382,7 +414,10 @@ function EmbeddedTerminal(props: {
     <div className="znac-view-term" data-phase={state?.phase ?? 'connecting'}>
       <div ref={hostRef} className="znac-agent-term" aria-label={displayName} />
       {(state === undefined || state.phase === 'connecting') && (
-        <p className="znac-view-empty">{launchingLabel}</p>
+        <div className="znac-view-switching" role="status">
+          <span className="znac-view-spin" aria-hidden="true" />
+          <span>{launchingLabel}</span>
+        </div>
       )}
       {state?.phase === 'exited' && (
         <div className="znac-view-term-note" role="status">

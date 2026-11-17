@@ -143,6 +143,43 @@ function claudeSlug(cwd: string): string {
   return cwd.replaceAll('/', '-')
 }
 
+/** qoder 的项目目录与 claude 同一 slug 布局（/ → -）。 */
+async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
+  const projectDir = join(homedir(), '.qoder', 'projects', claudeSlug(cwd))
+  let names: string[]
+  try {
+    names = await fs.readdir(projectDir)
+  } catch {
+    return []
+  }
+  const entries: CliSessionEntry[] = []
+  for (const name of names.filter((file) => file.endsWith('.jsonl')).slice(-20)) {
+    const id = name.replace(/\.jsonl$/, '')
+    try {
+      const stat = await fs.stat(join(projectDir, name))
+      // 首行 jsonl 里通常有首条用户消息，取前 40 个字符当摘要（失败不影响列表）。
+      let summary = 'Qoder 会话'
+      try {
+        const head = await fs.readFile(join(projectDir, name), 'utf8')
+        const first = JSON.parse(head.slice(0, head.indexOf('\n') === -1 ? head.length : head.indexOf('\n'))) as { message?: { content?: unknown } }
+        const content = first.message?.content
+        const text = typeof content === 'string' ? content : Array.isArray(content)
+          ? content.map((part) => typeof part === 'object' && part !== null && 'text' in part ? String((part as { text: unknown }).text) : '').join(' ')
+          : ''
+        const trimmed = text.trim()
+        if (trimmed !== '') summary = trimmed.slice(0, 40)
+      } catch {
+        // 摘要尽力而为。
+      }
+      entries.push({ id, summary, updatedAt: stat.mtime.toISOString(), source: 'cli' })
+    } catch {
+      // 文件刚被删掉就跳过。
+    }
+  }
+  entries.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
+  return entries
+}
+
 async function listClaudeSessions(cwd: string): Promise<CliSessionEntry[]> {
   const projectDir = join(homedir(), '.claude', 'projects', claudeSlug(cwd))
   let names: string[]
@@ -173,6 +210,10 @@ export async function listAgentSessions(agent: Pick<AgentConfig, 'command'>, cwd
   const base = commandBasename(agent.command)
   try {
     if (base === 'qodercli' || base === 'qoder') {
+      // 优先直读 ~/.qoder/projects/<slug> 会话文件（毫秒级）；空了再退回
+      // CLI 子进程枚举（--list-sessions 要拉起整个 CLI，秒级延迟）。
+      const fileEntries = await listQoderSessions(cwd)
+      if (fileEntries.length > 0) return fileEntries.slice(0, 20)
       const output = await runCommand(agent.command, ['--list-sessions'], cwd)
       if (output === null) return []
       const entries = parseQoderSessionList(output)
