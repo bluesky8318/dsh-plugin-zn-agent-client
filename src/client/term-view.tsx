@@ -13,7 +13,7 @@
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
 import React, { useLayoutEffect, useRef } from 'react'
-import type { HostTerminalView, HostTerminalViewState } from './term-model.ts'
+import type { HostTerminalEnvironment, HostTerminalView, HostTerminalViewState } from './term-model.ts'
 
 /** 单个模拟器单元的 props。 */
 export interface TermScreenProps {
@@ -49,7 +49,7 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
       fontSize: 13,
       minimumContrastRatio: 4.5,
       cursorBlink: true,
-      scrollback: current.current.state.scrollback ?? 2000,
+      scrollback: current.current.state.environment?.scrollback ?? 2000,
     })
     const addon = new FitAddon()
     xterm.loadAddon(addon)
@@ -62,7 +62,7 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
     const measure = (): void => {
       const live = current.current
       if (!live.visible || !live.state.writable || node.clientWidth === 0 || node.clientHeight === 0) return
-      fitScreen(xterm, addon, live.state, model)
+      fitScreen(xterm, addon, live.state.environment, model)
     }
     const observer = typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(measure)
     observer?.observe(node)
@@ -107,14 +107,16 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
   }, [state.render, model])
 
   // 尺寸与输入权都跟着视图状态走：给没握控制权的视图 fit 会和别的窗口打架。
-  const { writable, info } = state
+  // 依赖里只放子对象（environment/info 的引用只在内容变化时更替）——整份
+  // state 每帧都是新对象，放进来会让本 effect 每帧都跑。
+  const { writable, environment, info } = state
   useLayoutEffect(() => {
     const xterm = emulator.current
     if (xterm === undefined) return
     xterm.options.disableStdin = !writable
-    if (visible && writable) fitScreen(xterm, fit.current, state, model)
+    if (visible && writable) fitScreen(xterm, fit.current, environment, model)
     else if (info !== undefined && !writable) xterm.resize(info.cols, info.rows)
-  }, [visible, writable, state, model])
+  }, [visible, writable, environment, info, model])
 
   return <div className="znac-term-screen" ref={element} role="application" aria-label={label} />
 }
@@ -126,11 +128,11 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
 function fitScreen(
   xterm: Terminal,
   addon: FitAddon | undefined,
-  state: HostTerminalViewState,
+  environment: HostTerminalEnvironment | undefined,
   model: HostTerminalView,
 ): void {
-  const maxCols = state.maxCols
-  const maxRows = state.maxRows
+  const maxCols = environment?.maxCols
+  const maxRows = environment?.maxRows
   if (maxCols === undefined || maxRows === undefined) return
   const dimensions = addon?.proposeDimensions()
   if (dimensions === undefined) return

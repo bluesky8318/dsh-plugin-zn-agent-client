@@ -38,14 +38,20 @@ export type HostTerminalFrame =
 /** 携带屏幕内容的帧（state 只是元数据，不进模拟器）。 */
 export type HostRenderFrame = Extract<HostTerminalFrame, { type: 'snapshot' | 'output' }>
 
+/** 宿主终端环境上限（remote.environment 下发，帧里随 state 携带）。 */
+export interface HostTerminalEnvironment {
+  readonly maxCols?: number | undefined
+  readonly maxRows?: number | undefined
+  readonly maxInputBytes?: number | undefined
+  readonly maxBufferedBytes?: number | undefined
+  readonly scrollback?: number | undefined
+}
+
 /** 单个终端视图的可观察状态。 */
 export interface HostTerminalViewState {
   readonly phase: 'idle' | 'loading' | 'creating' | 'connecting' | 'connected' | 'disconnected' | 'closing' | 'closed' | 'failed'
-  readonly cwd?: string | undefined
-  readonly maxInputBytes?: number | undefined
-  readonly maxCols?: number | undefined
-  readonly maxRows?: number | undefined
-  readonly scrollback?: number | undefined
+  /** 环境上限（对象引用只在环境变化时更替——effect 依赖用它而不是整个 state）。 */
+  readonly environment?: HostTerminalEnvironment | undefined
   readonly title?: string | undefined
   readonly info?: HostTerminalInfo | undefined
   /** 本视图当前是否握有输入/尺寸控制权。 */
@@ -82,17 +88,32 @@ export interface HostTerminalView {
   close(): Promise<void>
 }
 
+/** 宿主验证过的可登录 shell（服务端 discoverShells 的产物）。 */
+export interface HostShell {
+  /** 可执行文件绝对路径。 */
+  readonly path: string
+  /** 可执行文件名（zsh / bash / …）。 */
+  readonly name: string
+  /** 登录参数（交互式 shell 是 ['-i']）。 */
+  readonly args: readonly string[]
+}
+
 /** 本插件消费的 webTerminals 服务切片。 */
 export interface WebTerminalsFace {
   /**
    * `key` 记忆化模型（重复调用免费），首次调用立即分配终端；
    * `contentId` 是持久化键 —— 同值重载后收养原进程。
+   * `shellPath` 指定登录 shell（缺省取用户偏好的系统 shell）。
    */
   view(sessionId: string, key: string, contentId: string, terminalId?: WebTerminalId, shellPath?: string): HostTerminalView
   /** 记住关闭意图并解绑 (sessionId, contentId)。 */
   close(sessionId: string, key: string, contentId: string, terminalId?: WebTerminalId): void
   /** 无视图查询会话终端。 */
   recover(sessionId: string): Promise<HostTerminalInfo[]>
+  /** 枚举系统 shell（服务端验证过存在性），带用户偏好选中项。 */
+  launchShells?(sessionId: string, signal: AbortSignal): Promise<{ shells: HostShell[]; selectedShell?: string | undefined }>
+  /** 记住 shell 偏好（localStorage，之后的缺省终端用它）。 */
+  selectShell?(path: string): void
 }
 
 /** sidebarRight 服务里用到的部分。 */
@@ -124,10 +145,56 @@ export function sidebarRight(ctx: Context): SidebarRightFace | undefined {
 /**
  * 一个 agent 在宿主终端里的持久身份（contentId 与 key 同值）。
  * 稳定值让页面重载收养同一进程；`#<n>` 后缀留给"重开"换生成。
+ * 每个"面"（surface）一个独立 contentId——两个面共用一个身份会让两个
+ * xterm 挂同一条流：每帧画两遍、输入也可能写两遍（卡顿与乱输入的根源）。
  * @param agentId - agent 配置 id。
  */
 export function agentTerminalIdentity(agentId: string): string {
   return `znacp-view:${agentId.replace(/[^\w-]/g, '-')}`
+}
+
+/**
+ * 侧边栏页签/浮层启动路径的身份：与主区视图分开，各开各的 PTY。
+ * @param agentId - agent 配置 id。
+ */
+export function agentTabIdentity(agentId: string): string {
+  return `znacp-tab:${agentId.replace(/[^\w-]/g, '-')}`
+}
+
+/**
+ * 系统 shell 视图的身份：一个 shell 路径一个终端。
+ * @param shellPath - shell 可执行文件路径。
+ */
+export function shellTerminalIdentity(shellPath: string): string {
+  const base = shellPath.split('/').at(-1) ?? shellPath
+  return `znacp-shell:${base.replace(/[^\w-]/g, '-')}`
+}
+
+/**
+ * 启动命令的"只注入一次"登记表（页面生命周期内）。
+ * 组件重挂载（芯片来回切、页签重开）不再往活着的 TUI 里重复敲命令——
+ * 重复注入会在运行中的 qodercli 里再起一层 qodercli，层层嵌套，越用越卡。
+ */
+const launchedCommands = new Set<string>()
+
+/**
+ * 查询某个（面, 会话, 身份）是否已注入过启动命令。
+ * @param surface - 面标识（view / tab）。
+ * @param sessionId - 会话 id。
+ * @param identity - 终端身份。
+ */
+export function hasLaunchCommand(surface: string, sessionId: string, identity: string): boolean {
+  return launchedCommands.has(`${surface}:${sessionId}:${identity}`)
+}
+
+/**
+ * 登记启动命令已注入。
+ * @param surface - 面标识（view / tab）。
+ * @param sessionId - 会话 id。
+ * @param identity - 终端身份。
+ */
+export function markLaunchCommand(surface: string, sessionId: string, identity: string): void {
+  launchedCommands.add(`${surface}:${sessionId}:${identity}`)
 }
 
 /**
@@ -175,11 +242,15 @@ export async function openAgentTerminalTab(
   const service = webTerminals(ctx)
   if (service === undefined) throw new Error('no service')
   if (agent.command === '') throw new Error('no command')
-  const identity = agentTerminalIdentity(agent.id)
+  const identity = agentTabIdentity(agent.id)
   const model = service.view(sessionId, identity, identity)
   await waitForWritable(model)
   // 程序注入启动命令；typed 语义是"人敲的"，这里保持 false。
-  model.write(`${agent.command}\r`)
+  // 只注入一次：重开同 contentId 不再往活着的 TUI 里重复敲。
+  if (!hasLaunchCommand('tab', sessionId, identity)) {
+    model.write(`${agent.command}\r`)
+    markLaunchCommand('tab', sessionId, identity)
+  }
   const sidebar = sidebarRight(ctx)
   const info = model.state.getSnapshot().info
   if (sidebar !== undefined && info !== undefined) {

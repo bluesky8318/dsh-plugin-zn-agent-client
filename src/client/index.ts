@@ -63,6 +63,6 @@ export function apply(ctx: Context): void {
 
   registerConfigCard(ctx, controller)
   registerShellOverlay(ctx, controller)
-  registerSidebarAction(ctx, controller)
+  registerSidebarAction(ctx)
   registerConversationView(ctx, controller)
 }
