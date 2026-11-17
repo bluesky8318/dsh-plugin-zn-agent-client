@@ -19,6 +19,8 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { AcpClientManager, type PromptOutcome } from './acp/client-manager.ts'
 import { SessionIndex } from './acp/session-index.ts'
 import { createZnAgentClientRemote } from './acp/remote-service.ts'
+import { CliTerminalController, type SubprocessFace } from './acp/cli-terminal.ts'
+import { createCliTerminalRoutes, type WebServerFace, type RouteRequest, type RouteResponse } from './acp/cli-routes.ts'
 import { openInExternalTerminal, type ExternalTerminal } from './external-terminal.ts'
 import type { AgentConfig } from './types/index.ts'
 
@@ -26,7 +28,7 @@ import type { AgentConfig } from './types/index.ts'
 export const name = 'dsh-plugin-zn-agent-client'
 
 /** 依赖的宿主服务：tools 注册工具，subagents 注册子代理提供方。 */
-export const inject = ['tools', 'subagents']
+export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory']
 
 /** 插件配置（设置命名空间由 cordis.patch.yml 行 id 派生）。 */
 export interface Config {
@@ -120,8 +122,6 @@ export function apply(ctx: Context, config: Config): void {
   }, `${name}: acp manager lifecycle`)
 
   // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
-  // workingDirectory 是可选服务——缺失时远端退回 agent 配置里的目录。
-  // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
   // workingDirectory 走可选注入（服务未组成时回调不执行，远端退回配置目录）。
   ctx.inject(['workingDirectory'], (inner) => {
     const cwdFace = (inner as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
@@ -140,6 +140,62 @@ export function apply(ctx: Context, config: Config): void {
     const fallback = fallbackId ? agents.find((agent) => agent.id === fallbackId) : undefined
     return fallback ?? agents[0] ?? null
   }
+
+  // CLI Agent 终端宿主（dsh-agents-cli 同款架构）：subprocess PTY + 自有 SSE 路由。
+  // webServer/subprocess 是宿主核心服务，缺失则整个特性不可用——直接声明依赖。
+  ctx.inject(['subprocess', 'webServer', 'workingDirectory'], (inner) => {
+    const faces = inner as Context & {
+      subprocess?: SubprocessFace
+      webServer?: WebServerFace
+      workingDirectory?: { defaultDirectory?: string }
+    }
+    const subprocess = faces.subprocess
+    const webServer = faces.webServer
+    if (subprocess === undefined || webServer === undefined) {
+      log('CLI 终端宿主不可用：缺少 subprocess/webServer 服务')
+      return
+    }
+    const defaultCwd = (): string => faces.workingDirectory?.defaultDirectory ?? process.cwd()
+    const controller = new CliTerminalController(subprocess, defaultCwd)
+
+    for (const route of createCliTerminalRoutes(controller, {
+      resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
+      defaultCwd,
+    })) {
+      ctx.effect(() => {
+        webServer.register({
+        kind: 'exact',
+        path: route.path,
+        handler: (req: RouteRequest, res: RouteResponse): void => {
+          // 'exact' 路由仍会收到其他路径/方法的请求，照参考插件做二次校验。
+          const pathname = (req.url ?? '').split('?')[0]
+          if (pathname !== route.path) {
+            res.writeHead(404)
+            res.end()
+            return
+          }
+          if (req.method !== route.method) {
+            res.writeHead(405, { allow: route.method })
+            res.end()
+            return
+          }
+          void route.handler(req, res).catch((error: unknown) => {
+            if (res.headersSent !== true) {
+              res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+              res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }))
+            }
+          })
+        },
+        })
+        // 路由由宿主 webServer 的 effect 生命周期管理；这里返回空清理保持签名。
+        return () => {}
+      }, `${name}: ${route.method} ${route.path}`)
+    }
+
+    ctx.effect(() => () => {
+      void controller.dispose()
+    }, `${name}: cli terminal controller lifecycle`)
+  })
 
   /**
    * 会话索引:ACP 会话历史存在 agent 侧(见 session-index.ts 模块注释),

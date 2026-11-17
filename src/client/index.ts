@@ -29,6 +29,7 @@ import { registerShellOverlay } from './shell-overlay.tsx'
 import { registerSidebarAction } from './sidebar-action.tsx'
 import { registerConversationView } from './conversation-view.tsx'
 import { mountExternalLauncher } from './remote-external.ts'
+import { disposeAllSessions } from './agent-stream.ts'
 import { injectStyles } from './styles.ts'
 
 /** 声明本插件的 locale 字典命名空间，让 `PropsLocale` 给出带类型的 `t`。 */
@@ -58,6 +59,8 @@ export function apply(ctx: Context): void {
   )
   // 样式表同样挂 effect：返回的清理函数会在插件停用时移除样式节点。
   ctx.effect(() => injectStyles())
+  // 终端会话（xterm + SSE）随插件卸载统一回收；进程由宿主半边回收。
+  ctx.effect(() => () => { disposeAllSessions() })
 
   // 配置模型：一次创建，多处注入。
   const controller = createConfigForm(ctx)

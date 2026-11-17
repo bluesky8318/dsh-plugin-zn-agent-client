@@ -11,6 +11,7 @@ import { apply, inject, name } from '../lib/index.js'
 const registeredTools = []
 const registeredProviders = []
 const registeredCommands = []
+const registeredRoutes = []
 const emitted = []
 const ctx = {
   tools: {
@@ -27,6 +28,15 @@ const ctx = {
   },
   // 可选服务的组合点：本插件用它挂 /znacp 命令。
   inject(services, fn) {
+    if (services.includes('subprocess') && services.includes('webServer')) {
+      // CLI 终端宿主面：stub 只验证注册路径，不真的 spawn。
+      fn({
+        subprocess: {},
+        webServer: { register() { registeredRoutes.push('route'); return () => {} } },
+        workingDirectory: { defaultDirectory: process.cwd() },
+      })
+      return
+    }
     if (services.includes('commands')) {
       fn({
         commands: {
@@ -71,7 +81,7 @@ const config = {
 apply(ctx, config)
 
 assert.equal(name, 'dsh-plugin-zn-agent-client')
-assert.deepEqual(inject, ['tools', 'subagents'])
+assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory'])
 
 assert.ok(registeredTools.some(t => t.name === 'list_acp_agents'), 'list_acp_agents should be registered')
 assert.ok(registeredTools.some(t => t.name === 'call_acp_agent'), 'call_acp_agent should be registered')

@@ -1,34 +1,36 @@
 /**
- * 主会话区的「CLI Agent」视图：在对话页签旁嵌一个内嵌终端。
+ * 主会话区的「CLI Agent」视图（dsh-agents-cli 同款架构）。
  *
  * 注册 `conversation.view` 槽位（billion-context 的上下文视图同款机制）。
- * 每个会话一份；agent 芯片切换目标。每个"面"有独立 contentId（主区
- * znacp-view:*、侧边栏页签 znacp-tab:*、shell znacp-shell:*）——两个面
- * 挂同一个进程会让每帧画两遍、输入写两遍，是卡顿的根源。
- * 另提供系统 shell 直开（launchShells 枚举，可不跑 agent 直接用终端）。
+ * 终端传输是插件自己的宿主路由（agent-stream.ts）：服务端持有 PTY 并负责
+ * 「启动命令只敲一次」，浏览器侧 xterm 只管渲染/键击/拟合。会话按 agent
+ * 全局复用——切换芯片/挂卸视图都不会杀进程或重复敲键。
  * @module dsh-plugin-zn-agent-client/client/conversation-view
  */
 
-import React, { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
-import {
-  agentTerminalIdentity,
-  hasLaunchCommand,
-  markLaunchCommand,
-  shellTerminalIdentity,
-  waitForWritable,
-  webTerminals,
-  type HostShell,
-  type HostTerminalView,
-  type WebTerminalsFace,
-} from './term-model.ts'
+import { acquireSession, type AgentTerminalSession } from './agent-stream.ts'
 import { readAgents } from './shell-overlay.tsx'
 import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
 import { getExternalOpener } from './remote-external.ts'
-import { TermScreen } from './term-view.tsx'
+
+/** 读页面明暗方案（只用于在切换时触发主题重读）。 */
+function useColorScheme(): 'dark' | 'light' {
+  const [scheme, setScheme] = useState<'dark' | 'light'>(() =>
+    window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+  )
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = (event: MediaQueryListEvent): void => { setScheme(event.matches ? 'dark' : 'light') }
+    query.addEventListener('change', onChange)
+    return () => { query.removeEventListener('change', onChange) }
+  }, [])
+  return scheme
+}
 
 /** conversation.view 是会话作用域槽位，运行时附带 sessionId。 */
 type ConvProps = PropsRuntime<'conversation.view'> &
@@ -53,42 +55,29 @@ export function registerConversationView(ctx: Context, controller: ConfigFormCon
 
 type ViewProps = ConvProps & { readonly pluginCtx: Context; readonly sessionId: string }
 
-/** 一个终端目标：agent TUI 或系统 shell。 */
+/** 一个终端目标：agent TUI。 */
 interface TermTarget {
   readonly id: string
   readonly displayName: string
-  readonly command: string
-  readonly shellPath?: string
 }
 
 /**
  * 视图主体：芯片行 + 内嵌 xterm。会话未就绪或无 agent 时给占位文案。
  */
 export function AgentTerminalView(props: ViewProps): React.ReactElement {
-  const { t, useTemplateConfig, pluginCtx, sessionId } = props
+  const { t, useTemplateConfig, sessionId } = props
   // 注入面的 hooks 舱位以 use<Name> 选择器钩子到达（见 InjectFace 契约）。
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
-  const shells = useSystemShells(pluginCtx, sessionId)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   // 在外部终端打开（特性探测：远端挂载失败时按钮不出现）。
   const externalOpener = getExternalOpener()
   const [externalState, setExternalState] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle')
 
-  const targets = useMemo<TermTarget[]>(() => {
-    const agentTargets = agents.map((agent: AgentEntry) => ({
-      id: agent.id,
-      displayName: agent.displayName,
-      command: agent.command,
-    }))
-    const shellTargets = shells.map((shell: HostShell) => ({
-      id: shellTerminalIdentity(shell.path),
-      displayName: shell.name,
-      command: '',
-      shellPath: shell.path,
-    }))
-    return [...agentTargets, ...shellTargets]
-  }, [agents, shells])
+  const targets = useMemo<TermTarget[]>(() => agents.map((agent: AgentEntry) => ({
+    id: agent.id,
+    displayName: agent.displayName,
+  })), [agents])
 
   const active = targets.find((target: TermTarget) => target.id === selectedId) ?? targets[0]
 
@@ -105,13 +94,12 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
             aria-selected={target.id === active?.id}
             className="znac-view-chip"
             data-active={target.id === active?.id}
-            data-shell={target.shellPath !== undefined}
             onClick={() => { setSelectedId(target.id) }}
           >
             {target.displayName}
           </button>
         ))}
-        {externalOpener !== undefined && active !== undefined && active.shellPath === undefined && (
+        {externalOpener !== undefined && active !== undefined && (
           <button
             type="button"
             className="znac-view-external"
@@ -134,10 +122,12 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
       {active !== undefined && (
         <EmbeddedTerminal
           key={active.id}
-          pluginCtx={pluginCtx}
-          sessionId={sessionId}
-          target={active}
+          agentId={active.id}
+          displayName={active.displayName}
           launchingLabel={t('view.launching')}
+          exitedLabel={t('view.exited')}
+          errorLabel={t('view.error')}
+          restartLabel={t('view.restart')}
           noServiceLabel={t('view.noService')}
         />
       )}
@@ -145,96 +135,55 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
   )
 }
 
-/**
- * 枚举系统 shell（失败安静降级成空表——没有 shell 芯片而已）。
- * 结果在会话生命周期内只取一次。
- */
-function useSystemShells(pluginCtx: Context, sessionId: string): HostShell[] {
-  const [shells, setShells] = useState<HostShell[]>([])
-  useEffect(() => {
-    const service = webTerminals(pluginCtx)
-    const launcher = service?.launchShells
-    if (typeof launcher !== 'function') return undefined
-    const controller = new AbortController()
-    launcher.call(service, sessionId, controller.signal)
-      .then((result: { shells: HostShell[]; selectedShell?: string | undefined }) => { setShells(result.shells) })
-      .catch(() => undefined)
-    return () => { controller.abort() }
-  }, [pluginCtx, sessionId])
-  return shells
-}
-
-/** 内嵌终端：一个目标一个模型实例（key 换代时重建）。 */
+/** 内嵌终端：会话按 agentId 全局复用，React 只挂 DOM + 订阅状态。 */
 function EmbeddedTerminal(props: {
-  pluginCtx: Context
-  sessionId: string
-  target: TermTarget
+  agentId: string
+  displayName: string
   launchingLabel: string
+  exitedLabel: string
+  errorLabel: string
+  restartLabel: string
   noServiceLabel: string
 }): React.ReactElement {
-  const { pluginCtx, sessionId, target, launchingLabel, noServiceLabel } = props
-  const [model, setModel] = useState<HostTerminalView | null>(null)
-  const [failed, setFailed] = useState<'service' | 'timeout' | null>(null)
+  const { agentId, displayName, launchingLabel, exitedLabel, errorLabel, restartLabel, noServiceLabel } = props
+  const [session, setSession] = useState<AgentTerminalSession | null>(null)
+  const scheme = useColorScheme()
 
-  const identity = target.shellPath !== undefined
-    ? shellTerminalIdentity(target.shellPath)
-    : agentTerminalIdentity(target.id)
-
-  // webTerminals.view 立即分配 PTY 并记入花名册；视图实例随芯片切换重建。
-  // shell 目标带 shellPath —— 登录 shell 由宿主挑选/记忆，无需注入命令。
   useEffect(() => {
-    const service: WebTerminalsFace | undefined = webTerminals(pluginCtx)
-    if (service === undefined) {
-      setFailed('service')
-      return
-    }
-    const instance = service.view(sessionId, identity, identity, undefined, target.shellPath)
-    setModel(instance)
-    setFailed(null)
-  }, [pluginCtx, sessionId, identity, target.shellPath])
+    setSession(acquireSession(agentId))
+  }, [agentId])
 
-  // 状态订阅走 useSyncExternalStore：快照引用相同时 React 跳过重渲染，
-  // 渲染帧（每个输出块）才触发一次。
   const state = useSyncExternalStore(
-    useMemo(() => (callback: () => void) => model?.state.subscribe(callback) ?? (() => {}), [model]),
-    useMemo(() => () => model?.state.getSnapshot(), [model]),
+    useMemo(() => (callback: () => void) => session?.subscribe(callback) ?? (() => {}), [session]),
+    useMemo(() => () => session?.getSnapshot(), [session]),
   )
 
-  // DOM 生命周期挂载/卸载；进程不随卸载死。
+  // DOM 挂载 + 主题同步（暗/亮切换时重读 token 颜色）。
+  const hostRef = useRef<HTMLDivElement | null>(null)
   useEffect(() => {
-    if (model === null) return
-    return model.mount()
-  }, [model])
+    const node = hostRef.current
+    if (session === null || node === null) return
+    session.attach(node)
+    session.syncTheme(node)
+    return () => { session.detach() }
+  }, [session, scheme])
 
-  // 首次 writable 注入启动命令——登记表按（面, 会话, 身份）只放行一次，
-  // 重挂载/芯片来回切不再往活着的 TUI 里重复敲（嵌套 TUI 是卡顿根源）。
-  // shell 目标不注入。
-  useEffect(() => {
-    if (model === null || target.shellPath !== undefined) return
-    if (hasLaunchCommand('view', sessionId, identity)) return
-    const snapshot = model.state.getSnapshot()
-    if (!snapshot.writable) {
-      let cancelled = false
-      void waitForWritable(model).then(() => {
-        if (!cancelled && !hasLaunchCommand('view', sessionId, identity)) {
-          markLaunchCommand('view', sessionId, identity)
-          model.write(`${target.command}\r`)
-        }
-      }).catch(() => { setFailed('timeout') })
-      return () => { cancelled = true }
-    }
-    markLaunchCommand('view', sessionId, identity)
-    model.write(`${target.command}\r`)
-    return undefined
-  }, [model, target.command, target.shellPath, sessionId, identity])
-
-  if (failed === 'service') return <p className="znac-view-empty">{noServiceLabel}</p>
-  if (model === null) return <p className="znac-view-empty">{launchingLabel}</p>
-  if (state === undefined) return <p className="znac-view-empty">{launchingLabel}</p>
+  if (session === null) return <p className="znac-view-empty">{noServiceLabel}</p>
+  if (state === undefined || state.phase === 'connecting') {
+    return <p className="znac-view-empty">{launchingLabel}</p>
+  }
 
   return (
     <div className="znac-view-term" data-phase={state.phase}>
-      <TermScreen model={model} state={state} visible label={target.displayName} />
+      <div ref={hostRef} className="znac-agent-term" aria-label={displayName} />
+      {state.phase === 'exited' && (
+        <div className="znac-view-term-note" role="status">
+          <span>{state.error !== '' ? `${errorLabel}: ${state.error}` : exitedLabel}</span>
+          <button type="button" className="znac-view-restart" onClick={() => { void session.restart() }}>
+            {restartLabel}
+          </button>
+        </div>
+      )}
     </div>
   )
 }

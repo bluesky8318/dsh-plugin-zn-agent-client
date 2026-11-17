@@ -6,7 +6,7 @@
  * @module dsh-plugin-zn-agent-client/client/shell-overlay
  */
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
@@ -74,9 +74,11 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
   const { t, useTemplateConfig } = props
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const cardRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
-    const onOpen = (): void => { setOpen(true) }
+    // 触发按钮是开关：再点一次收起（与焦点离开逻辑互不打架）。
+    const onOpen = (): void => { setOpen((current) => !current) }
     document.addEventListener(OPEN_LAUNCHER_EVENT, onOpen)
     return () => { document.removeEventListener(OPEN_LAUNCHER_EVENT, onOpen) }
   }, [])
@@ -91,8 +93,28 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') close()
     }
+    // 焦点离开卡片（Tab 走出去/点外面可聚焦元素）即收起；relatedTarget 为空
+    // 表示焦点落回 body（点空白处也是这种感觉）——交给 mousedown 判定。
+    const outside = (target: EventTarget | null): boolean =>
+      target instanceof Node && cardRef.current !== null && !cardRef.current.contains(target)
+    const onFocusOut = (event: FocusEvent): void => {
+      if (event.relatedTarget !== null && outside(event.relatedTarget)) close()
+    }
+    // 点卡片与页脚开关之外即收起（开关自己走 toggle）。
+    const onMouseDown = (event: MouseEvent): void => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      const onSwitch = target instanceof Element && target.closest('.znac-foot') !== null
+      if (!onSwitch && outside(target)) close()
+    }
     document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('keydown', onKey) }
+    document.addEventListener('focusout', onFocusOut)
+    document.addEventListener('mousedown', onMouseDown)
+    return () => {
+      document.removeEventListener('keydown', onKey)
+      document.removeEventListener('focusout', onFocusOut)
+      document.removeEventListener('mousedown', onMouseDown)
+    }
   }, [open, close])
 
   if (!open) return null
@@ -106,7 +128,7 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
 
   return (
     <div className="znac-overlay znac-overlay-launcher" role="presentation">
-      <div className="znac-launcher" role="dialog" aria-label={t('launcher.title')}>
+      <div ref={cardRef} className="znac-launcher" role="dialog" aria-label={t('launcher.title')}>
         <div className="znac-overlay-head">
           <span className="znac-launcher-title">{t('launcher.title')}</span>
           <button type="button" className="znac-overlay-close" aria-label={t('launcher.close')} onClick={close}>×</button>
@@ -135,6 +157,3 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
     </div>
   )
 }
-
-/** 供 footer 主按钮等外部入口直接启动（无浮层）。 */
-export { launchAgentEntry } from './term-model.ts'

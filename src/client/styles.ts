@@ -420,16 +420,14 @@ const CSS = `
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
   border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: var(--dsw-radius-md);
   background: var(--dsw-alias-bg-base);
 }
-
-/* xterm.js 的必要骨架规则（内联自 @xterm/xterm 的 xterm.css——bundle 不加载
-   外部 css 文件），配色交给容器上的主题 token。 */
-.znac-term-screen {
-  position: relative;
-  height: 100%;
+.znac-agent-term {
+  flex: 1;
   min-height: 0;
   padding: 6px;
   box-sizing: border-box;
@@ -438,9 +436,38 @@ const CSS = `
   cursor: text;
   user-select: none;
 }
-.znac-term-screen .xterm { position: relative; height: 100%; }
-.znac-term-screen .xterm-helpers { position: absolute; top: 0; z-index: 5; }
-.znac-term-screen .xterm-helper-textarea {
+.znac-view-term-note {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-top: 0.5px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.znac-view-restart {
+  margin-left: auto;
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-sm);
+  padding: 2px 10px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 12px;
+  line-height: 1.5;
+  cursor: pointer;
+}
+.znac-view-restart:hover { background: var(--dsw-alias-interactive-bg-hover); }
+
+/* xterm.js 的必要骨架规则（内联自 @xterm/xterm 的 xterm.css——bundle 不加载
+   外部 css 文件），配色交给容器上的主题 token。 */
+.znac-agent-term {
+  position: relative;
+  height: 100%;
+}
+.znac-agent-term .xterm { position: relative; height: 100%; }
+.znac-agent-term .xterm-helpers { position: absolute; top: 0; z-index: 5; }
+.znac-agent-term .xterm-helper-textarea {
   position: absolute;
   opacity: 0;
   left: -9999em;
@@ -452,24 +479,24 @@ const CSS = `
   overflow: hidden;
   resize: none;
 }
-.znac-term-screen .composition-view {
+.znac-agent-term .composition-view {
   position: absolute;
   z-index: 1;
   display: none;
   background: var(--dsw-alias-bg-layer-1);
   color: var(--dsw-alias-label-primary);
 }
-.znac-term-screen .composition-view.active { display: block; }
-.znac-term-screen .xterm-viewport {
+.znac-agent-term .composition-view.active { display: block; }
+.znac-agent-term .xterm-viewport {
   position: absolute;
   inset: 0;
   overflow-y: scroll;
   cursor: default;
   background-color: var(--dsw-alias-bg-base);
 }
-.znac-term-screen .xterm-screen { position: relative; }
-.znac-term-screen .xterm-screen canvas { position: absolute; left: 0; top: 0; }
-.znac-term-screen .xterm-char-measure-element {
+.znac-agent-term .xterm-screen { position: relative; }
+.znac-agent-term .xterm-screen canvas { position: absolute; left: 0; top: 0; }
+.znac-agent-term .xterm-char-measure-element {
   position: absolute;
   top: 0;
   left: -9999em;
