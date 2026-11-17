@@ -375,10 +375,17 @@ const CSS = `
   display: flex;
   flex-direction: column;
   gap: 8px;
-  height: 100%;
+  /* 宿主在 active 阶段把 viewArea 放开为 flex:1 0 auto + min-height:auto
+     （不约束高度），height:100% 解析不到边界 → xterm 自撑高度溢出滚动区。
+     宿主在滚动容器上发布的 --dsh-conversation-viewport-height 是可视带的
+     真实高度（ConversationContent.tsx 用 ResizeObserver 实时更新），官方
+     约定的视图尺寸来源。旧宿主无此变量时回退 100%。 */
+  height: var(--dsh-conversation-viewport-height, 100%);
+  flex: none;
   min-height: 0;
   padding: 8px;
   box-sizing: border-box;
+  overflow: hidden;
 }
 .znac-view-empty {
   margin: 0;
