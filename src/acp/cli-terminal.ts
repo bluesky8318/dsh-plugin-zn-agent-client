@@ -118,6 +118,24 @@ export function buildShellLaunch(shellPath: string, platform: NodeJS.Platform = 
   return { path: shellPath, name: kind || 'sh', argv: [shellPath, ...extra] }
 }
 
+/**
+ * 把 CLI 命令包进一次性的交互 shell 启动：`-c` 在 shell 初始化**完成后**执行命令
+ * （zsh/bash 的重配置不再产生「命令敲早了被吞」的竞态），命令退出后 `exec` 回
+ * 一个全新交互登录 shell —— 保留「CLI 退出后 shell 还在」的习惯。
+ * 命令为空时退化为普通登录 shell。
+ */
+export function buildAgentShellLaunch(shellPath: string, command: string): { path: string; name: string; argv: string[] } {
+  const kind = shellKind(shellPath)
+  const line = command.trim()
+  if (line === '') return buildShellLaunch(shellPath)
+  const quoted = `'${shellPath.replaceAll("'", `'\\''`)}'`
+  if (kind === 'cmd') return { path: shellPath, name: kind, argv: [shellPath, '/d', '/c', line] }
+  if (kind === 'pwsh' || kind === 'powershell') return { path: shellPath, name: kind, argv: [shellPath, '-NoLogo', '-Command', line] }
+  if (kind === 'fish') return { path: shellPath, name: kind, argv: [shellPath, '-i', '-C', line] }
+  if (kind === 'zsh' || kind === 'bash') return { path: shellPath, name: kind, argv: [shellPath, '-il', '-c', `${line}; exec ${quoted} -il`] }
+  return { path: shellPath, name: kind || 'sh', argv: [shellPath, '-i', '-c', `${line}; exec ${quoted} -i`] }
+}
+
 /** 组装 spawnTerminal 的 env：剥掉 Electron/DSH 桌面注入，补终端变量。 */
 export function buildTerminalEnv(baseEnv: NodeJS.ProcessEnv): Record<string, string> {
   const env: Record<string, string> = {}
@@ -222,18 +240,14 @@ export class ManagedTerminal {
   private operations: Promise<unknown> = Promise.resolve()
   private exited = false
   private closing: Promise<void> | null = null
-  private commandStarted = false
-  private readonly launchLine: string
 
   constructor(
     readonly id: string,
     private readonly handle: TerminalHandle,
     status: TerminalStatus,
-    launchLine: string,
     private readonly onGone: (id: string) => void,
   ) {
     this.status = status
-    this.launchLine = launchLine !== '' ? launchLine : status.command
     this.screen = createScreenBuffer(status.cols, status.rows)
     void this.consume()
   }
@@ -324,22 +338,6 @@ export class ManagedTerminal {
   }
 
   /** 让渲染器先挂上（收到快照）再敲启动命令；1s 超时兜底。 */
-  armCommand(onFirstOutput: Promise<void>): void {
-    const timer = setTimeout(() => this.startCommand(), 1000)
-    timer.unref?.()
-    void onFirstOutput.then(() => {
-      clearTimeout(timer)
-      this.startCommand()
-    }).catch(() => {})
-  }
-
-  private startCommand(): void {
-    if (this.commandStarted) return
-    this.commandStarted = true
-    const command = this.launchLine.trim()
-    if (command !== '') void this.handle.write(`${command}\r`).catch(() => {})
-  }
-
   async write(data: string): Promise<void> {
     if (typeof data !== 'string' || data.length === 0) return
     if (Buffer.byteLength(data, 'utf8') > LIMITS.maxInputBytes) throw new Error('输入超出单次长度上限')
@@ -469,7 +467,11 @@ export class CliTerminalController {
     const dims = clampDimensions(options.cols, options.rows)
     const cwd = typeof options.cwd === 'string' && options.cwd !== '' ? options.cwd : this.defaultCwd()
     const shellPath = await resolveUserShell(this.subprocess)
-    const launch = buildShellLaunch(shellPath)
+    const launchLine = options.launchLine !== undefined && options.launchLine !== '' ? options.launchLine : options.command
+    // 命令直接由 shell 的 -c 启动：初始化完成才执行，退出后 exec 回交互 shell。
+    // 不再「先起 shell 再敲命令」——那条路有敲早被吞的竞态（CLI 退出后点新会话
+    // 只见 shell 不见 CLI 的根因）。
+    const launch = buildAgentShellLaunch(shellPath, launchLine)
     const handle = await this.subprocess.spawnTerminal({
       argv: launch.argv,
       cwd,
@@ -485,7 +487,7 @@ export class CliTerminalController {
       agentId: options.agentId,
       displayName: options.displayName,
       command: options.command,
-      launch: options.launchLine !== undefined && options.launchLine !== '' ? options.launchLine : options.command,
+      launch: launchLine,
       cwd,
       cols: dims.cols,
       rows: dims.rows,
@@ -493,23 +495,13 @@ export class CliTerminalController {
       exitCode: null,
       error: '',
     }
-    let resolveFirstOutput: (() => void) | undefined
-    const firstOutput = new Promise<void>((resolve) => { resolveFirstOutput = resolve })
     const managed = new ManagedTerminal(
       options.id,
       handle,
       status,
-      options.launchLine ?? '',
       (id) => { this.terminals.delete(id) },
     )
-    // 首个 output 帧发出即视为渲染器已挂上——用 attachSse 后的第一帧信号。
-    const originalBroadcast = managed.broadcastFrame.bind(managed)
-    managed.broadcastFrame = (frame: Record<string, unknown>) => {
-      originalBroadcast(frame)
-      if (frame.type === 'output') resolveFirstOutput?.()
-    }
     this.terminals.set(options.id, managed)
-    managed.armCommand(firstOutput)
     return managed
   }
 
