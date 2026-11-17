@@ -111,6 +111,9 @@ importers:
       vitest:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@22.20.4)(jsdom@29.1.1)(vite@8.3.1(@types/node@22.20.4))
+      zod:
+        specifier: 4.6.6
+        version: 4.6.6
 
 packages:
 
@@ -1360,9 +1363,6 @@ packages:
   yuku-parser@0.8.7:
     resolution: {integrity: sha512-vRD9nwt4L3aYpxNqeSC4WqLv58xrXef0Ong1Mc45CTXTIpvLafx7JO05sczmQZwdLEZvywrLOGdNC5+Rp5N1BQ==}
 
-  zod@4.6.5:
-    resolution: {integrity: sha512-v5l/aFXZQeai4awLbOpSoHecE9UiMrnfx75tEXLjNonXVARxQ5mOeipTjROUchszUNCqnE+hqAMujRsRHsut2Q==}
-
   zod@4.6.6:
     resolution: {integrity: sha512-4UmzQUF5fxvfcYHlbjBmejU+w+hbDnWFx4aS8kBx7nPBHcO2SqPbpAG8snbdg+Xse4pRefR98hgjFgIMCI/UhA==}
 
@@ -1496,7 +1496,7 @@ snapshots:
       '@deepseek-ai/dsh-timeout': 0.1.7-rc.2(@deepseek-ai/cordis@4.1.0)
       '@deepseek-ai/dsh-typert-protocol': 0.1.7-rc.2(@deepseek-ai/cordis@4.1.0)
       '@deepseek-ai/schemastery': 3.18.4
-      zod: 4.6.5
+      zod: 4.6.6
 
   '@deepseek-ai/dsh-client-ui-renderer@0.1.7-rc.2(@deepseek-ai/cordis@4.1.0)':
     dependencies:
@@ -2378,7 +2378,5 @@ snapshots:
       '@yuku-parser/binding-linux-x64-musl': 0.8.7
       '@yuku-parser/binding-win32-arm64': 0.8.7
       '@yuku-parser/binding-win32-x64': 0.8.7
-
-  zod@4.6.5: {}
 
   zod@4.6.6: {}

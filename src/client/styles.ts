@@ -400,6 +400,22 @@ const CSS = `
   border-color: transparent;
   color: var(--dsw-alias-label-primary);
 }
+.znac-view-external {
+  margin-left: auto;
+  padding: 3px 10px;
+  border: 0.5px solid var(--dsw-alias-border-l1);
+  border-radius: var(--dsw-radius-md);
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  cursor: pointer;
+}
+.znac-view-external:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znac-view-external[data-state='opened'] { color: var(--dsw-alias-state-success-primary); }
+.znac-view-external[data-state='failed'] { color: var(--dsw-alias-state-error-primary); }
+.znac-view-external:disabled { cursor: default; opacity: 0.6; }
 .znac-view-term {
   flex: 1;
   min-height: 0;

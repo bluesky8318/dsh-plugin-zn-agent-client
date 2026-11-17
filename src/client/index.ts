@@ -28,6 +28,7 @@ import { en, zh, type ZnAgentClientLocaleKey } from './locales.ts'
 import { registerShellOverlay } from './shell-overlay.tsx'
 import { registerSidebarAction } from './sidebar-action.tsx'
 import { registerConversationView } from './conversation-view.tsx'
+import { mountExternalLauncher } from './remote-external.ts'
 import { injectStyles } from './styles.ts'
 
 /** 声明本插件的 locale 字典命名空间，让 `PropsLocale` 给出带类型的 `t`。 */
@@ -65,4 +66,7 @@ export function apply(ctx: Context): void {
   registerShellOverlay(ctx, controller)
   registerSidebarAction(ctx)
   registerConversationView(ctx, controller)
+
+  // 远端挂载是异步的；失败安静降级（按钮隐藏），不阻塞其余 UI 面。
+  void mountExternalLauncher(ctx)
 }

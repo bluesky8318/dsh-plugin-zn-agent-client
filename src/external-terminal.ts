@@ -34,9 +34,10 @@ function shellQuote(value: string): string {
 /**
  * 生成在 cwd 下启动 agent 的 shell 命令行（cd + exec 命令）。
  * 参数逐个 shell-quote，避免注入。
+ * @param cwdOverride - 覆盖工作目录（远端按钮传会话目录时用）。
  */
-export function buildAgentShellLine(agent: AgentConfig): string {
-  const cwd = agent.workingDirectory || process.cwd()
+export function buildAgentShellLine(agent: AgentConfig, cwdOverride?: string): string {
+  const cwd = cwdOverride || agent.workingDirectory || process.cwd()
   const parts = [agent.command, ...(agent.args ?? [])].map(shellQuote).join(' ')
   return `cd ${shellQuote(cwd)} && exec ${parts}`
 }
@@ -93,16 +94,18 @@ function runOsascript(script: string): Promise<void> {
  * 在外部终端里启动 agent。非 macOS 直接抛错。
  * @param agent - 要启动的 agent（用裸命令，不带 --acp）。
  * @param terminal - 目标终端应用。
+ * @param cwdOverride - 覆盖工作目录（远端按钮传会话目录时用）。
  */
 export async function openInExternalTerminal(
   agent: AgentConfig,
   terminal: ExternalTerminal = 'terminal',
+  cwdOverride?: string,
 ): Promise<ExternalLaunchResult> {
   if (platform() !== 'darwin') {
     throw new Error('Opening an external terminal is only supported on macOS for now.')
   }
-  const shellLine = buildAgentShellLine(agent)
+  const shellLine = buildAgentShellLine(agent, cwdOverride)
   const script = buildAppleScript(terminal, shellLine)
   await runOsascript(script)
-  return { terminal, command: shellLine, workingDirectory: agent.workingDirectory || process.cwd() }
+  return { terminal, command: shellLine, workingDirectory: cwdOverride || agent.workingDirectory || process.cwd() }
 }

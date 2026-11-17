@@ -18,6 +18,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { AcpClientManager, type PromptOutcome } from './acp/client-manager.ts'
 import { SessionIndex } from './acp/session-index.ts'
+import { createZnAgentClientRemote } from './acp/remote-service.ts'
 import { openInExternalTerminal, type ExternalTerminal } from './external-terminal.ts'
 import type { AgentConfig } from './types/index.ts'
 
@@ -117,6 +118,15 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => () => {
     void manager.disconnect()
   }, `${name}: acp manager lifecycle`)
+
+  // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
+  // workingDirectory 是可选服务——缺失时远端退回 agent 配置里的目录。
+  ctx.effect(() => {
+    const cwdFace = (ctx as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
+    // 实例化即注册（cordis Service 挂在 ctx 上）；effect 只负责生命周期记账。
+    createZnAgentClientRemote(ctx, (agentKey) => resolveAgentConfig(agentKey) ?? undefined, cwdFace)
+    return () => {}
+  }, `${name}: remote service znAgentClient`)
 
   /** 解析要用的 agent：显式 id > 默认 id > 清单第一个。 */
   const resolveAgentConfig = (agentId?: string): AgentConfig | null => {

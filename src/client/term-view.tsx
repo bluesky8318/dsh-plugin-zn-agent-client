@@ -39,6 +39,7 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
   const element = useRef<HTMLDivElement | null>(null)
   const emulator = useRef<Terminal | undefined>(undefined)
   const fit = useRef<FitAddon | undefined>(undefined)
+  const webglRef = useRef<WebglAddon | undefined>(undefined)
   const lastRevision = useRef(0)
   const scheme = useColorScheme()
   // xterm effect 里读实时值而不重建模拟器：模型绑定模拟器，活标志走 ref。
@@ -66,15 +67,37 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
     xterm.loadAddon(addon)
     xterm.open(node)
     // 高性能路径：WebGL2（GPU 渲染）——全屏 TUI 的输出/交互明显更流畅。
-    // 不支持 WebGL2 时回退到默认渲染器，功能不受影响。
+    // 不支持 WebGL2 时回退到默认 DOM 渲染器，功能不受影响。
+    // 注意：addon 必须在 open() 之后加载（xterm 5+ 的官方顺序）。
     let webgl: WebglAddon | undefined
-    try {
-      webgl = new WebglAddon()
-      webgl.onContextLoss(() => { webgl?.dispose() })
-      xterm.loadAddon(webgl)
-    } catch {
-      webgl = undefined // 无 WebGL2：保留默认渲染
+    const attachWebgl = (): void => {
+      try {
+        webgl = new WebglAddon()
+        webglRef.current = webgl
+        // context loss 时必须重建 addon——只 dispose 会让终端没有任何渲染器，
+        // 表现为永久黑屏（见 hermes-agent #27740）。dispose 会回退到 DOM 渲染，
+        // 这里紧接着重挂一个新的 WebGL addon。
+        webgl.onContextLoss(() => {
+          webgl?.dispose()
+          webgl = undefined
+          webglRef.current = undefined
+          attachWebgl()
+        })
+        xterm.loadAddon(webgl)
+      } catch {
+        webgl = undefined // 无 WebGL2：保留默认 DOM 渲染
+        webglRef.current = undefined
+      }
     }
+    attachWebgl()
+    // WebGL 首帧/重挂后需要一次重排+刷新，把 glyph atlas 和尺寸对齐，否则
+    // 打开时是黑屏、直到第一次输出才出现内容。
+    requestAnimationFrame(() => {
+      if (emulator.current !== xterm) return
+      try { addon.fit() } catch { /* 尺寸未就绪时忽略 */ }
+      webglRef.current?.clearTextureAtlas()
+      xterm.refresh(0, xterm.rows - 1)
+    })
     xterm.textarea?.setAttribute('aria-label', current.current.label)
     emulator.current = xterm
     fit.current = addon
@@ -90,7 +113,8 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
     return () => {
       observer?.disconnect()
       input.dispose()
-      webgl?.dispose()
+      webglRef.current?.dispose()
+      webglRef.current = undefined
       xterm.dispose()
       emulator.current = undefined
       fit.current = undefined
@@ -122,6 +146,9 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
     if (render.frame.type === 'snapshot') {
       xterm.reset()
       xterm.resize(render.frame.info.cols, render.frame.info.rows)
+      // reset 会清空 glyph atlas 的映射——重放快照前清一次 atlas，避免旧
+      // 纹理残留/黑屏（superset #3504 的同款处理）。
+      webglRef.current?.clearTextureAtlas()
     }
     xterm.write(render.frame.type === 'snapshot' ? render.frame.screen : render.frame.data, () => {
       model.acknowledge(render.revision)

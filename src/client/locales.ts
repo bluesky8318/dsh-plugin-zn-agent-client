@@ -31,6 +31,7 @@ export type ZnAgentClientLocaleKey =
   | 'footer.launch' | 'footer.more'
   // 主会话区 CLI Agent 视图
   | 'view.label' | 'view.empty' | 'view.noService' | 'view.launching'
+  | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
 
 /** 英文文案。 */
 export const en: Record<ZnAgentClientLocaleKey, string> = {
@@ -82,6 +83,10 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
   'view.noService': 'This deployment has no embedded-terminal service; use the /znacp command instead.',
   'view.launching': 'Starting the CLI…',
+  'view.externalOpen': 'Open in external terminal',
+  'view.externalOpening': 'Opening…',
+  'view.externalOpened': 'Opened',
+  'view.externalFailed': 'Open failed',
 }
 
 /** 中文文案。 */
@@ -134,4 +139,8 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
   'view.noService': '当前部署没有内嵌终端服务；请改用 /znacp 命令。',
   'view.launching': '正在启动 CLI…',
+  'view.externalOpen': '在外部终端打开',
+  'view.externalOpening': '正在打开…',
+  'view.externalOpened': '已打开',
+  'view.externalFailed': '打开失败',
 }

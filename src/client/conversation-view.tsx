@@ -27,6 +27,7 @@ import {
 import { readAgents } from './shell-overlay.tsx'
 import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
+import { getExternalOpener } from './remote-external.ts'
 import { TermScreen } from './term-view.tsx'
 
 /** conversation.view 是会话作用域槽位，运行时附带 sessionId。 */
@@ -70,6 +71,9 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
   const shells = useSystemShells(pluginCtx, sessionId)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 在外部终端打开（特性探测：远端挂载失败时按钮不出现）。
+  const externalOpener = getExternalOpener()
+  const [externalState, setExternalState] = useState<'idle' | 'opening' | 'opened' | 'failed'>('idle')
 
   const targets = useMemo<TermTarget[]>(() => {
     const agentTargets = agents.map((agent: AgentEntry) => ({
@@ -107,6 +111,25 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
             {target.displayName}
           </button>
         ))}
+        {externalOpener !== undefined && active !== undefined && active.shellPath === undefined && (
+          <button
+            type="button"
+            className="znac-view-external"
+            data-state={externalState}
+            disabled={externalState === 'opening'}
+            aria-label={t('view.externalOpen')}
+            onClick={() => {
+              const open = getExternalOpener()
+              if (open === undefined || active === undefined) return
+              setExternalState('opening')
+              void open(sessionId, active.id).then((result) => {
+                setExternalState(result?.opened === true ? 'opened' : 'failed')
+              }).catch(() => { setExternalState('failed') })
+            }}
+          >
+            {t(externalState === 'opening' ? 'view.externalOpening' : externalState === 'opened' ? 'view.externalOpened' : externalState === 'failed' ? 'view.externalFailed' : 'view.externalOpen')}
+          </button>
+        )}
       </div>
       {active !== undefined && (
         <EmbeddedTerminal
