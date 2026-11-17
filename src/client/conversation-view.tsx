@@ -110,6 +110,15 @@ function SessionArea(props: {
   const { agentId, sessionId, displayName, targets, selectedId, onSelect } = props
   // t 的键类型由 LocaleNamespaceMap 推导，运行时只是查表函数。
   const t = props.t as (key: string) => string
+
+/** ISO 时间 → 本地 "MM-DD HH:mm"（解析失败原样返回）。 */
+function formatTime(value: string): string {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
   const [session, setSession] = useState<AgentTerminalSession | null>(null)
   const [histOpen, setHistOpen] = useState(false)
   const [histState, setHistState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle')
@@ -283,7 +292,7 @@ function SessionArea(props: {
                   onClick={() => { runAction({ mode: 'resume', resumeTarget: item.id }, `${t('view.labelResume')} ${shortId(item.id)}`) }}
                 >
                   <span className="znac-view-hist-summary">{item.summary}</span>
-                  <span className="znac-view-hist-meta">{item.updatedAt}</span>
+                  <span className="znac-view-hist-meta">{formatTime(item.updatedAt)}</span>
                   <span className="znac-view-hist-id">{shortId(item.id)}</span>
                 </button>
               ))}

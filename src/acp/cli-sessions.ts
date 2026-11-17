@@ -146,6 +146,51 @@ function claudeSlug(cwd: string): string {
   return cwd.replaceAll('/', '-')
 }
 
+
+/** 会话 jsonl 首段的形状（只取摘要要用的字段）。 */
+interface SessionLine {
+  type?: unknown
+  message?: { content?: unknown }
+  humanInput?: { text?: unknown }
+}
+
+/**
+ * 从会话 jsonl 文件前 64KB 里找第一条人类输入当摘要。
+ * qoder/claude 的文件头几行常是元数据（workspace-directories、active-leaf 等），
+ * 必须逐行找到 type==='user' 的行；跳过 <local-command 之类的包装文本。
+ */
+async function firstUserSummary(filePath: string, fallback: string): Promise<string> {
+  const handle = await fs.open(filePath, 'r').catch(() => null)
+  if (handle === null) return fallback
+  try {
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(65_536), 0, 65_536, 0)
+    for (const line of buffer.toString('utf8', 0, bytesRead).split('\n')) {
+      if (line.trim() === '') continue
+      let parsed: SessionLine
+      try {
+        parsed = JSON.parse(line) as SessionLine
+      } catch {
+        continue
+      }
+      if (parsed.type !== 'user') continue
+      const human = typeof parsed.humanInput?.text === 'string' ? parsed.humanInput.text.trim() : ''
+      const content = parsed.message?.content
+      const text = human !== '' ? human
+        : typeof content === 'string' ? content.trim()
+        : Array.isArray(content)
+          ? content.map((part) => typeof part === 'object' && part !== null && 'text' in part ? String((part as { text: unknown }).text) : '').join(' ').trim()
+          : ''
+      if (text === '' || text.startsWith('<')) continue
+      return text.slice(0, 60)
+    }
+  } catch {
+    // 摘要尽力而为。
+  } finally {
+    await handle.close().catch(() => {})
+  }
+  return fallback
+}
+
 /** qoder 的项目目录与 claude 同一 slug 布局（/ → -）。 */
 async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
   const projectDir = join(homedir(), '.qoder', 'projects', claudeSlug(cwd))
@@ -160,20 +205,7 @@ async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
     const id = name.replace(/\.jsonl$/, '')
     try {
       const stat = await fs.stat(join(projectDir, name))
-      // 首行 jsonl 里通常有首条用户消息，取前 40 个字符当摘要（失败不影响列表）。
-      let summary = 'Qoder 会话'
-      try {
-        const head = await fs.readFile(join(projectDir, name), 'utf8')
-        const first = JSON.parse(head.slice(0, head.indexOf('\n') === -1 ? head.length : head.indexOf('\n'))) as { message?: { content?: unknown } }
-        const content = first.message?.content
-        const text = typeof content === 'string' ? content : Array.isArray(content)
-          ? content.map((part) => typeof part === 'object' && part !== null && 'text' in part ? String((part as { text: unknown }).text) : '').join(' ')
-          : ''
-        const trimmed = text.trim()
-        if (trimmed !== '') summary = trimmed.slice(0, 40)
-      } catch {
-        // 摘要尽力而为。
-      }
+      const summary = await firstUserSummary(join(projectDir, name), 'Qoder 会话')
       entries.push({ id, summary, updatedAt: stat.mtime.toISOString(), source: 'cli' })
     } catch {
       // 文件刚被删掉就跳过。
@@ -196,7 +228,8 @@ async function listClaudeSessions(cwd: string): Promise<CliSessionEntry[]> {
     const id = name.replace(/\.jsonl$/, '')
     try {
       const stat = await fs.stat(join(projectDir, name))
-      entries.push({ id, summary: 'Claude 会话', updatedAt: stat.mtime.toISOString(), source: 'cli' })
+      const summary = await firstUserSummary(join(projectDir, name), 'Claude 会话')
+      entries.push({ id, summary, updatedAt: stat.mtime.toISOString(), source: 'cli' })
     } catch {
       // 文件刚被删掉就跳过。
     }
