@@ -363,6 +363,14 @@ const CSS = `
 }
 
 /* ---- 主会话区 CLI Agent 视图 ---- */
+/* CLI Agent 视图激活时隐藏会话自带的消息输入框（composer seat）：
+   视图根节点带 data-znacp-cli-view，视图只在自身 tab 激活时挂载，
+   因此纯 CSS :has() 即可随 tab 切换即时生效/恢复，无需状态同步。
+   会话结构：scrollBody[data-conversation-scroll] > (views… + seat[data-composer-seat])。 */
+[data-conversation-scroll]:has([data-znacp-cli-view]) > [data-composer-seat] {
+  display: none !important;
+}
+
 .znac-view {
   display: flex;
   flex-direction: column;

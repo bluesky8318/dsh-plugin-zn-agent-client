@@ -77,10 +77,10 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
 
   const active = targets.find((target: TermTarget) => target.id === selectedId) ?? targets[0]
 
-  if (targets.length === 0) return <div className="znac-view"><p className="znac-view-empty">{t('view.empty')}</p></div>
+  if (targets.length === 0) return <div className="znac-view" data-znacp-cli-view="true"><p className="znac-view-empty">{t('view.empty')}</p></div>
 
   return (
-    <div className="znac-view">
+    <div className="znac-view" data-znacp-cli-view="true">
       {active !== undefined && (
         <SessionArea
           key={active.id}
