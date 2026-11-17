@@ -444,6 +444,12 @@ const CSS = `
   cursor: text;
   user-select: none;
 }
+/* FitAddon 以 xterm 元素的父节点量高：这层若 height:auto（默认），父高=
+   xterm 当前渲染高，fit 永远量不到容器真实高度 → 行数卡在初始值（半屏）。 */
+.znac-agent-term-screen {
+  height: 100%;
+  overflow: hidden;
+}
 .znac-view-term-note {
   display: flex;
   align-items: center;
