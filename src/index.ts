@@ -121,12 +121,12 @@ export function apply(ctx: Context, config: Config): void {
 
   // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
   // workingDirectory 是可选服务——缺失时远端退回 agent 配置里的目录。
-  ctx.effect(() => {
-    const cwdFace = (ctx as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
-    // 实例化即注册（cordis Service 挂在 ctx 上）；effect 只负责生命周期记账。
-    createZnAgentClientRemote(ctx, (agentKey) => resolveAgentConfig(agentKey) ?? undefined, cwdFace)
-    return () => {}
-  }, `${name}: remote service znAgentClient`)
+  // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
+  // workingDirectory 走可选注入（服务未组成时回调不执行，远端退回配置目录）。
+  ctx.inject(['workingDirectory'], (inner) => {
+    const cwdFace = (inner as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
+    void createZnAgentClientRemote(ctx, (agentKey) => resolveAgentConfig(agentKey) ?? undefined, cwdFace)
+  })
 
   /** 解析要用的 agent：显式 id > 默认 id > 清单第一个。 */
   const resolveAgentConfig = (agentId?: string): AgentConfig | null => {
