@@ -32,9 +32,9 @@ export type ZnAgentClientLocaleKey =
   // 主会话区 CLI Agent 视图
   | 'view.label' | 'view.empty' | 'view.noService' | 'view.launching'
   | 'view.exited' | 'view.error' | 'view.restart'
-  | 'view.sessions' | 'view.newSession' | 'view.continueLatest' | 'view.history'
+  | 'view.sessions' | 'view.newSession' | 'view.history'
   | 'view.historyLoading' | 'view.historyFailed' | 'view.historyEmpty'
-  | 'view.labelAttach' | 'view.labelNew' | 'view.labelContinue' | 'view.labelResume'
+  | 'view.labelAttach' | 'view.labelNew' | 'view.labelResume'
   | 'view.agentPicker' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
@@ -93,14 +93,12 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.restart': 'Restart',
   'view.sessions': 'Session controls',
   'view.newSession': '＋ New session',
-  'view.continueLatest': '↻ Continue latest',
   'view.history': 'History',
   'view.historyLoading': 'Loading sessions…',
   'view.historyFailed': 'Failed to list sessions',
   'view.historyEmpty': 'No sessions in this workspace yet',
   'view.labelAttach': 'Attached session',
   'view.labelNew': 'New session',
-  'view.labelContinue': 'Continued latest',
   'view.labelResume': 'Resumed',
   'view.agentPicker': '选择 CLI agent',
   'view.sessionLabel': '会话',
@@ -168,14 +166,12 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.restart': '重启',
   'view.sessions': '会话控件',
   'view.newSession': '＋ 新会话',
-  'view.continueLatest': '↻ 继续最近',
   'view.history': '历史',
   'view.historyLoading': '正在加载会话…',
   'view.historyFailed': '会话列表加载失败',
   'view.historyEmpty': '当前工作区还没有会话',
   'view.labelAttach': '已接入会话',
   'view.labelNew': '新会话',
-  'view.labelContinue': '已延续最近会话',
   'view.labelResume': '已还原',
   'view.externalOpen': '在外部终端打开',
   'view.agentPicker': '选择 CLI agent',

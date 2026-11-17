@@ -97,7 +97,7 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
   )
 }
 
-/** 方案C+ 会话区：agent 下拉（运行状态点）+ 会话控件条（新会话/继续最近/历史▾）+ 内嵌终端。 */
+/** 方案C+ 会话区：agent 下拉（运行状态点）+ 会话控件条（新会话/历史▾）+ 内嵌终端。 */
 function SessionArea(props: {
   agentId: string
   sessionId: string
@@ -227,14 +227,6 @@ function SessionArea(props: {
           onClick={() => { runAction({ mode: 'new' }, t('view.labelNew')) }}
         >
           {t('view.newSession')}
-        </button>
-        <button
-          type="button"
-          className="znac-view-sbtn"
-          disabled={session === null}
-          onClick={() => { runAction({ mode: 'continue' }, t('view.labelContinue')) }}
-        >
-          {t('view.continueLatest')}
         </button>
         <div className="znac-view-histwrap" ref={histRef}>
           <button
