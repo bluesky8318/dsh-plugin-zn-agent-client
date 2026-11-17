@@ -18,6 +18,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import { AcpClientManager, type PromptOutcome } from './acp/client-manager.ts'
 import { SessionIndex } from './acp/session-index.ts'
+import { openInExternalTerminal, type ExternalTerminal } from './external-terminal.ts'
 import type { AgentConfig } from './types/index.ts'
 
 /** 插件名（cordis.patch.yml 行 id 必须与此一致）。 */
@@ -377,6 +378,43 @@ export function apply(ctx: Context, config: Config): void {
             lastUsedAt: record.lastUsedAt,
           })),
         }
+      },
+    }),
+  )
+
+  /** 高保真备选：在外部终端（Terminal/iTerm2/Ghostty）里启动 agent 的 TUI。 */
+  ctx.tools.register(
+    defineTool({
+      name: 'open_agent_in_external_terminal',
+      description: 'Open a configured ACP agent\'s interactive CLI in a real terminal app (macOS Terminal, iTerm2 or Ghostty) at its working directory — native rendering and system fonts, unlike the embedded view. macOS only.',
+      parameters: {
+        agentId: { type: 'string', required: true, description: 'Agent id from list_acp_agents.' },
+        terminal: { type: 'string', description: 'Target terminal app: "terminal" (default), "iterm" or "ghostty".' },
+      },
+      output: {
+        schema: {
+          type: 'object',
+          properties: {
+            terminal: { type: 'string', required: true },
+            command: { type: 'string', required: true },
+            workingDirectory: { type: 'string', required: true },
+          },
+          additionalProperties: false,
+        },
+        render: (_args, value) => [
+          { type: 'text', text: `已在 ${String(value.terminal)} 中启动：${String(value.command)}（工作目录 ${String(value.workingDirectory)}）` },
+        ],
+      },
+      async execute(args) {
+        const agent = resolveAgentConfig(args.agentId)
+        if (!agent) {
+          throw new Error(`No ACP agent configured${args.agentId ? ` with id "${args.agentId}"` : ''}. Call list_acp_agents to see what is configured.`)
+        }
+        const requested = typeof args.terminal === 'string' ? args.terminal : 'terminal'
+        const terminal: ExternalTerminal = requested === 'iterm' || requested === 'ghostty' ? requested : 'terminal'
+        // 外部终端跑交互式 TUI：裸命令，不带 ACP 的 --acp 参数。
+        const tuiAgent: AgentConfig = { ...agent, args: [] }
+        return await openInExternalTerminal(tuiAgent, terminal)
       },
     }),
   )

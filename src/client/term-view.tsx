@@ -12,8 +12,12 @@
 
 import { FitAddon } from '@xterm/addon-fit'
 import { Terminal } from '@xterm/xterm'
+import { WebglAddon } from '@xterm/addon-webgl'
 import React, { useLayoutEffect, useRef } from 'react'
 import type { HostTerminalEnvironment, HostTerminalView, HostTerminalViewState } from './term-model.ts'
+
+/** 与宿主终端一致的等宽字体栈（主题可经 --dsw-font-mono 覆盖）。 */
+const TERMINAL_FONT_STACK = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 
 /** 单个模拟器单元的 props。 */
 export interface TermScreenProps {
@@ -44,9 +48,16 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
   useLayoutEffect(() => {
     const node = element.current
     if (node === null) return
+    // 字体按 CSS px 理解——不要乘 devicePixelRatio（WebGL 渲染器内部已按 DPR
+    // 建 backing store/glyph atlas，外面再乘一次就会出现“老人大字体”）。
+    // lineHeight/letterSpacing 走默认，避免把 cell 尺寸搞坏。
+    // 字体族用宿主终端同款等宽栈，不跟随容器（容器的 fontFamily 是正文/系统
+    // 字体，会让终端用比例字体，看起来又怪又大）。
     const xterm = new Terminal({
-      fontFamily: getComputedStyle(node).fontFamily,
+      fontFamily: TERMINAL_FONT_STACK,
       fontSize: 13,
+      lineHeight: 1.0,
+      letterSpacing: 0,
       minimumContrastRatio: 4.5,
       cursorBlink: true,
       scrollback: current.current.state.environment?.scrollback ?? 2000,
@@ -54,6 +65,16 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
     const addon = new FitAddon()
     xterm.loadAddon(addon)
     xterm.open(node)
+    // 高性能路径：WebGL2（GPU 渲染）——全屏 TUI 的输出/交互明显更流畅。
+    // 不支持 WebGL2 时回退到默认渲染器，功能不受影响。
+    let webgl: WebglAddon | undefined
+    try {
+      webgl = new WebglAddon()
+      webgl.onContextLoss(() => { webgl?.dispose() })
+      xterm.loadAddon(webgl)
+    } catch {
+      webgl = undefined // 无 WebGL2：保留默认渲染
+    }
     xterm.textarea?.setAttribute('aria-label', current.current.label)
     emulator.current = xterm
     fit.current = addon
@@ -69,6 +90,7 @@ export function TermScreen(props: TermScreenProps): React.ReactElement {
     return () => {
       observer?.disconnect()
       input.dispose()
+      webgl?.dispose()
       xterm.dispose()
       emulator.current = undefined
       fit.current = undefined
