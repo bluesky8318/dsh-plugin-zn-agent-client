@@ -21,7 +21,9 @@ const slug = cwd.replaceAll('/', '-')
 const claudeProjectDir = join(process.env.HOME ?? '', '.claude', 'projects', slug)
 mkdirSync(claudeProjectDir, { recursive: true })
 const sessionFile = join(claudeProjectDir, `${FAKE_SESSION_ID}.jsonl`)
-writeFileSync(sessionFile, '{"type":"user","message":"seed"}\n')
+// 会话文件需要一条真实用户消息（真实 qoder/claude 行形状：message 是对象）——
+// 空会话会被历史列表过滤（CLI 自己也无法 resume 它们）。
+writeFileSync(sessionFile, '{"type":"user","message":{"role":"user","content":"seed"}}\n')
 const now = new Date()
 utimesSync(sessionFile, now, now)
 

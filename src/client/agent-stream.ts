@@ -213,6 +213,13 @@ export class AgentTerminalSession {
     host.appendChild(this.element)
     this.container = host
     this.observer?.observe(host)
+    // 关键：connect 之前先同步 fit 一次。PTY 按 /open 带的尺寸 spawn；若先
+    // connect（此时 xterm 还是 80×24 构造默认值），TUI 按默认行数绘制，之后
+    // 本地 fit 变高只放大画布、TUI 不重绘 → 界面只占半屏。
+    if (host.clientWidth > 0 && host.clientHeight > 0 && this.fit !== undefined && this.terminal !== undefined) {
+      try { this.fit.fit() } catch { /* 容器尚未布局时交给 rAF 兜底 */ }
+      this.lastDimensions = { cols: this.terminal.cols, rows: this.terminal.rows }
+    }
     this.scheduleFit()
     if (fresh) {
       // 新建的模拟器没有历史屏幕：重开传输拿一份新 snapshot 回放。
