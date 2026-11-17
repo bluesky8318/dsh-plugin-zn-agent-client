@@ -182,6 +182,16 @@ export function apply(ctx: Context, config: Config): void {
         () => {
           let dispose: (() => void) | undefined
           try {
+            // 旧周期遗留的未注销路由会占住路径（register 遇 duplicate 抛错）。
+            // webServer 的 exact/prefixes 表就是 Map 字段——尽力删掉我们的旧路径，
+            // 字段名变化时删除无效，回落到下方 catch（需重启应用一次清干净）。
+            const purge = (webServer: unknown): void => {
+              for (const key of ['exact', 'prefixes'] as const) {
+                const table = (webServer as Record<string, unknown>)[key]
+                if (table instanceof Map) table.delete(route.path)
+              }
+            }
+            purge(cliWebServer)
             dispose = cliWebServer.register({
             kind: 'exact',
             path: route.path,
