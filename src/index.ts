@@ -157,7 +157,9 @@ export function apply(ctx: Context, config: Config): void {
   // CLI Agent 终端宿主（dsh-agents-cli 同款架构）：subprocess PTY + 自有 SSE 路由。
   // webServer/subprocess 是宿主核心服务，缺失则整个特性不可用——直接声明依赖。
   ctx.inject(['subprocess', 'webServer', 'workingDirectory', 'sessions'], (inner) => {
-    const faces = inner as Context & {
+    // 在回调内就把服务“解引用”成实例——回调作用域上下文在请求期可能已不活跃
+    // （cannot get required service ... in inactive context），不能存 inner 本身。
+    const cliCtx = inner as Context & {
       subprocess?: SubprocessFace
       webServer?: WebServerFace
       // workingDirectory.get 只接受“活会话对象”（投影 cellFor 直接读
@@ -165,13 +167,15 @@ export function apply(ctx: Context, config: Config): void {
       workingDirectory?: { defaultDirectory?: string; get?(session: unknown): string }
       sessions?: { get?(id: string): unknown }
     }
-    const subprocess = faces.subprocess
-    const webServer = faces.webServer
+    const subprocess = cliCtx.subprocess
+    const webServer = cliCtx.webServer
+    const workingDir = cliCtx.workingDirectory
+    const sessions = cliCtx.sessions
     if (subprocess === undefined || webServer === undefined) {
       log('CLI 终端宿主不可用：缺少 subprocess/webServer 服务')
       return
     }
-    const defaultCwd = (): string => faces.workingDirectory?.defaultDirectory ?? process.cwd()
+    const defaultCwd = (): string => workingDir?.defaultDirectory ?? process.cwd()
     const controller = new CliTerminalController(subprocess, defaultCwd)
 
     for (const route of createCliTerminalRoutes(controller, {
@@ -179,8 +183,8 @@ export function apply(ctx: Context, config: Config): void {
       defaultCwd,
       // id 字符串必须先经 sessions.get 解析成会话对象，再交给 workingDirectory.get。
       resolveSessionCwd: (sessionId: string) => {
-        const session = faces.sessions?.get?.(sessionId)
-        return session === undefined ? undefined : faces.workingDirectory?.get?.(session)
+        const session = sessions?.get?.(sessionId)
+        return session === undefined ? undefined : workingDir?.get?.(session)
       },
     })) {
       ctx.effect(() => {
