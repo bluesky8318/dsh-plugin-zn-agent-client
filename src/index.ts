@@ -156,11 +156,14 @@ export function apply(ctx: Context, config: Config): void {
 
   // CLI Agent 终端宿主（dsh-agents-cli 同款架构）：subprocess PTY + 自有 SSE 路由。
   // webServer/subprocess 是宿主核心服务，缺失则整个特性不可用——直接声明依赖。
-  ctx.inject(['subprocess', 'webServer', 'workingDirectory'], (inner) => {
+  ctx.inject(['subprocess', 'webServer', 'workingDirectory', 'sessions'], (inner) => {
     const faces = inner as Context & {
       subprocess?: SubprocessFace
       webServer?: WebServerFace
-      workingDirectory?: { defaultDirectory?: string; get?(sessionId: unknown): string | undefined }
+      // workingDirectory.get 只接受“活会话对象”（投影 cellFor 直接读
+      // session.snapshotEvents()，传 id 字符串会抛 snapshotEvents is not a function）。
+      workingDirectory?: { defaultDirectory?: string; get?(session: unknown): string }
+      sessions?: { get?(id: string): unknown }
     }
     const subprocess = faces.subprocess
     const webServer = faces.webServer
@@ -174,7 +177,11 @@ export function apply(ctx: Context, config: Config): void {
     for (const route of createCliTerminalRoutes(controller, {
       resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
       defaultCwd,
-      resolveSessionCwd: (sessionId: string) => faces.workingDirectory?.get?.(sessionId),
+      // id 字符串必须先经 sessions.get 解析成会话对象，再交给 workingDirectory.get。
+      resolveSessionCwd: (sessionId: string) => {
+        const session = faces.sessions?.get?.(sessionId)
+        return session === undefined ? undefined : faces.workingDirectory?.get?.(session)
+      },
     })) {
       ctx.effect(() => {
         webServer.register({
