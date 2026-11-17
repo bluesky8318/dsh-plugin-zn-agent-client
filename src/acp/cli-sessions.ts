@@ -159,6 +159,7 @@ interface SessionLine {
   type?: unknown
   message?: { content?: unknown }
   humanInput?: { text?: unknown }
+  isMeta?: unknown
 }
 
 /**
@@ -166,11 +167,17 @@ interface SessionLine {
  * qoder/claude 的文件头几行常是元数据（workspace-directories、active-leaf 等），
  * 必须逐行找到 type==='user' 的行；跳过 <local-command 之类的包装文本。
  */
-async function firstUserSummary(filePath: string, fallback: string): Promise<string> {
+/**
+ * 扫描会话 jsonl 前 64KB 找第一条真实用户输入。
+ * hasContent=false 表示会话里没有任何真实用户消息（只有 /quit 这类本地命令包装
+ * 或系统 meta 行）——空会话，CLI 自己也无法 resume。
+ */
+async function scanFirstUser(filePath: string): Promise<{ text: string | null; hasContent: boolean }> {
   const handle = await fs.open(filePath, 'r').catch(() => null)
-  if (handle === null) return fallback
+  if (handle === null) return { text: null, hasContent: false }
   try {
     const { buffer, bytesRead } = await handle.read(Buffer.alloc(65_536), 0, 65_536, 0)
+    let hasContent = false
     for (const line of buffer.toString('utf8', 0, bytesRead).split('\n')) {
       if (line.trim() === '') continue
       let parsed: SessionLine
@@ -180,6 +187,7 @@ async function firstUserSummary(filePath: string, fallback: string): Promise<str
         continue
       }
       if (parsed.type !== 'user') continue
+      if (parsed.isMeta === true) continue
       const human = typeof parsed.humanInput?.text === 'string' ? parsed.humanInput.text.trim() : ''
       const content = parsed.message?.content
       const text = human !== '' ? human
@@ -187,15 +195,19 @@ async function firstUserSummary(filePath: string, fallback: string): Promise<str
         : Array.isArray(content)
           ? content.map((part) => typeof part === 'object' && part !== null && 'text' in part ? String((part as { text: unknown }).text) : '').join(' ').trim()
           : ''
-      if (text === '' || text.startsWith('<')) continue
-      return text.slice(0, 60)
+      if (text !== '' && !text.startsWith('<')) {
+        return { text: text.slice(0, 60), hasContent: true }
+      }
+      // 字符串内容是 <command-name> 这类本地命令包装 → 不算内容；但数组内容
+      //（图片/多段）即使提不出纯文本也算真实输入。
+      if (Array.isArray(content) && content.length > 0) hasContent = true
     }
+    return { text: null, hasContent }
   } catch {
-    // 摘要尽力而为。
+    return { text: null, hasContent: false }
   } finally {
     await handle.close().catch(() => {})
   }
-  return fallback
 }
 
 /**
@@ -245,15 +257,17 @@ async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
     const filePath = join(projectDir, name)
     try {
       const stat = await fs.stat(filePath)
-      const [summary, workdir] = await Promise.all([
-        firstUserSummary(filePath, 'Qoder 会话'),
+      const [scan, workdir] = await Promise.all([
+        scanFirstUser(filePath),
         firstWorkspaceDir(filePath),
       ])
+      // 空会话（没有任何真实用户输入）不列：CLI 自己也无法 resume 它们。
+      if (!scan.hasContent) continue
       // 只列当前工作区的会话：跨 worktree 的会话 CLI resume 不到，历史里直接不出现。
       if (workdir !== null && normalizeCwd(workdir) !== normalizeCwd(cwd)) continue
       entries.push({
         id,
-        summary,
+        summary: scan.text ?? 'Qoder 会话',
         updatedAt: stat.mtime.toISOString(),
         source: 'cli',
         ...(workdir !== null ? { cwd: workdir } : {}),
@@ -280,15 +294,17 @@ async function listClaudeSessions(cwd: string): Promise<CliSessionEntry[]> {
     const filePath = join(projectDir, name)
     try {
       const stat = await fs.stat(filePath)
-      const [summary, workdir] = await Promise.all([
-        firstUserSummary(filePath, 'Claude 会话'),
+      const [scan, workdir] = await Promise.all([
+        scanFirstUser(filePath),
         firstWorkspaceDir(filePath),
       ])
+      // 空会话（没有任何真实用户输入）不列：CLI 自己也无法 resume 它们。
+      if (!scan.hasContent) continue
       // 只列当前工作区的会话：跨 worktree 的会话 CLI resume 不到，历史里直接不出现。
       if (workdir !== null && normalizeCwd(workdir) !== normalizeCwd(cwd)) continue
       entries.push({
         id,
-        summary,
+        summary: scan.text ?? 'Claude 会话',
         updatedAt: stat.mtime.toISOString(),
         source: 'cli',
         ...(workdir !== null ? { cwd: workdir } : {}),
