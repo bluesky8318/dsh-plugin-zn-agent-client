@@ -331,16 +331,16 @@ export class AcpClientManager {
    * Send one prompt turn and wait for the stop reason.
    * Agent text is collected from `agent_message_chunk` notifications.
    */
-  async sendPrompt(content: readonly ContentBlock[], options: { sessionId?: string } = {}): Promise<PromptOutcome> {
+  async sendPrompt(content: readonly ContentBlock[], options: { sessionId?: string; cwd?: string } = {}): Promise<PromptOutcome> {
     const connection = this.requireConnection()
     let sessionId = options.sessionId ?? this.currentSessionId
     if (!sessionId) {
-      sessionId = (await this.newSession()).sessionId
+      sessionId = (await this.newSession(options.cwd)).sessionId
     }
     // 显式给了不同的 sessionId:这是要续聊 agent 侧的既有会话。agent 没声明
     // loadSession 能力时明确报错,而不是让 session/prompt 吃一个未知 id。
     if (options.sessionId && options.sessionId !== this.currentSessionId) {
-      const loaded = await this.loadSession(options.sessionId)
+      const loaded = await this.loadSession(options.sessionId, options.cwd)
       if (!loaded) {
         throw new Error(
           this.supportsLoadSession

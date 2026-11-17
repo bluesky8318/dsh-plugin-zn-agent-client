@@ -17,7 +17,7 @@ export type ZnAgentClientLocaleKey =
   | 'field.agents.label' | 'field.agents.hint' | 'field.agents.add' | 'field.agents.remove'
   | 'field.agents.unnamed'
   | 'field.agent.id' | 'field.agent.displayName' | 'field.agent.command' | 'field.agent.args'
-  | 'field.agent.workingDirectory' | 'field.agent.env' | 'field.agent.invalidEnv'
+  | 'field.agent.env' | 'field.agent.invalidEnv'
   | 'field.agent.secretId' | 'field.agent.envVarName'
   | 'field.defaultAgent.label' | 'field.defaultAgent.hint'
   | 'field.autoAllow.label' | 'field.autoAllow.hint'
@@ -60,7 +60,6 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'field.agent.displayName': 'Display name',
   'field.agent.command': 'Command',
   'field.agent.args': 'Arguments (space separated)',
-  'field.agent.workingDirectory': 'Working directory',
   'field.agent.env': 'Extra env (JSON)',
   'field.agent.invalidEnv': 'Extra env must be a valid JSON object.',
   'field.agent.secretId': 'Secret ID (optional)',
@@ -131,7 +130,6 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'field.agent.displayName': '显示名',
   'field.agent.command': '命令',
   'field.agent.args': '参数(空格分隔)',
-  'field.agent.workingDirectory': '工作目录',
   'field.agent.env': '额外环境变量(JSON)',
   'field.agent.invalidEnv': '额外环境变量必须是合法的 JSON 对象。',
   'field.agent.secretId': 'Secret ID(可选)',

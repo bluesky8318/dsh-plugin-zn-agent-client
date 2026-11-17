@@ -37,7 +37,7 @@ function shellQuote(value: string): string {
  * @param cwdOverride - 覆盖工作目录（远端按钮传会话目录时用）。
  */
 export function buildAgentShellLine(agent: AgentConfig, cwdOverride?: string): string {
-  const cwd = cwdOverride || agent.workingDirectory || process.cwd()
+  const cwd = cwdOverride ?? process.cwd()
   const parts = [agent.command, ...(agent.args ?? [])].map(shellQuote).join(' ')
   return `cd ${shellQuote(cwd)} && exec ${parts}`
 }
@@ -107,5 +107,5 @@ export async function openInExternalTerminal(
   const shellLine = buildAgentShellLine(agent, cwdOverride)
   const script = buildAppleScript(terminal, shellLine)
   await runOsascript(script)
-  return { terminal, command: shellLine, workingDirectory: cwdOverride || agent.workingDirectory || process.cwd() }
+  return { terminal, command: shellLine, workingDirectory: cwdOverride ?? process.cwd() }
 }

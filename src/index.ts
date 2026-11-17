@@ -59,7 +59,6 @@ export const Config: Schema<any> = Schema.object({
       // Schema.dict() 的推断类型引用 cosmokit 的 Dict，会让导出类型不可移植
       // （TS2883）；用 any + interface 约束代替。
       env: Schema.any(),
-      workingDirectory: Schema.string().default(''),
       // apiKey 的内部字段不能 .required()：agent 未配置 apiKey 时 schemastery
       // 仍会用空对象走一遍校验，required 会把整行配置判非法。
       apiKey: Schema.object({
@@ -117,6 +116,20 @@ export function apply(ctx: Context, config: Config): void {
     log,
   })
 
+  /** 宿主 workingDirectory 服务句柄（ctx.inject 异步到达）；用于把工具调用的
+   * 工作目录解析到当前工作区（session cwd）。 */
+  let cwdFace: { get(sessionId: unknown): string | undefined } | undefined
+  /** 从工具运行上下文解析调用方会话的工作目录；解析不到时退回进程 cwd。 */
+  const sessionCwd = (exec: { agent?: { session?: unknown } }): string | undefined => {
+    return agentSessionCwd(exec.agent)
+  }
+  /** 从（命令/工具的）调用方 agent 解析会话工作目录。 */
+  const agentSessionCwd = (agent: { readonly session?: unknown } | undefined): string | undefined => {
+    const session = agent?.session
+    if (session === undefined || session === null || typeof session !== 'string') return undefined
+    return cwdFace?.get(session)
+  }
+
   ctx.effect(() => () => {
     void manager.disconnect()
   }, `${name}: acp manager lifecycle`)
@@ -124,7 +137,7 @@ export function apply(ctx: Context, config: Config): void {
   // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
   // workingDirectory 走可选注入（服务未组成时回调不执行，远端退回配置目录）。
   ctx.inject(['workingDirectory'], (inner) => {
-    const cwdFace = (inner as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
+    cwdFace = (inner as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
     void createZnAgentClientRemote(ctx, (agentKey) => resolveAgentConfig(agentKey) ?? undefined, cwdFace)
   })
 
@@ -250,26 +263,28 @@ export function apply(ctx: Context, config: Config): void {
   const runAgentTurn = async (
     agent: AgentConfig,
     prompt: string | readonly ContentBlock[],
-    options: { sessionId?: string; resume?: boolean; track?: boolean } = {},
+    options: { sessionId?: string; resume?: boolean; track?: boolean; cwd?: string } = {},
   ): Promise<PromptOutcome> => {
+    // 工作目录跟着当前工作区走（调用方会话的 cwd），不再来自 agent 配置。
+    const cwd = options.cwd ?? agent.workingDirectory ?? process.cwd()
     await manager.ensureInitialized(agent)
     let effective = options.sessionId
     if (effective === undefined && options.resume !== false) {
       // 只延续同工作目录的会话：agent 侧(qoder/claude 等)按项目存放会话,
       // 跨目录 resume 会被对方拒掉,反而打断"新项目新会话"的预期。
-      const latest = await sessionIndex.latestFor(agent.id, agent.workingDirectory)
+      const latest = await sessionIndex.latestFor(agent.id, cwd)
       if (latest !== null && manager.canResumeSessions()) effective = latest.sessionId
     }
     if (options.resume === false && effective === undefined) {
-      await manager.newSession()
+      await manager.newSession(cwd)
     }
     const content: readonly ContentBlock[] = typeof prompt === 'string'
       ? [{ type: 'text', text: prompt } as ContentBlock]
       : prompt
-    const outcome = await manager.sendPrompt(content, effective !== undefined ? { sessionId: effective } : {})
+    const outcome = await manager.sendPrompt(content, effective !== undefined ? { sessionId: effective, cwd } : { cwd })
     if (options.track !== false) {
       void sessionIndex
-        .record({ sessionId: outcome.sessionId, agentId: agent.id, cwd: agent.workingDirectory || process.cwd() })
+        .record({ sessionId: outcome.sessionId, agentId: agent.id, cwd })
         .catch(() => undefined)
     }
     return outcome
@@ -368,18 +383,19 @@ export function apply(ctx: Context, config: Config): void {
           // 显式引用 > 自动延续最近会话 > 全新会话(newSession)。
           const autoTarget = args.newSession === true || args.sessionId !== undefined
             ? undefined
-            : (await sessionIndex.latestFor(agent.id, agent.workingDirectory))?.sessionId
+            : (await sessionIndex.latestFor(agent.id, sessionCwd(exec) ?? process.cwd()))?.sessionId
+          const turnCwd = sessionCwd(exec) ?? process.cwd()
           const requested = args.newSession === true
             ? undefined
             : args.sessionId
-              ? await resolveSessionRef(agent.id, agent.workingDirectory, args.sessionId)
+              ? await resolveSessionRef(agent.id, turnCwd, args.sessionId)
               : undefined
           const outcome = await runAgentTurn(
             agent,
             [{ type: 'text', text: args.prompt }],
             requested !== undefined
-              ? { sessionId: requested }
-              : { ...(args.newSession === true ? { resume: false } : {}) },
+              ? { sessionId: requested, cwd: turnCwd }
+              : { ...(args.newSession === true ? { resume: false } : { cwd: turnCwd }) },
           )
           return {
             response: outcome.agentText,
@@ -499,7 +515,7 @@ export function apply(ctx: Context, config: Config): void {
       }
       try {
         // 子代理委派语义上是独立任务:强制全新会话,不续聊主对话。
-        const outcome = await runAgentTurn(agent, request.prompt, { resume: false, track: false })
+        const outcome = await runAgentTurn(agent, request.prompt, { resume: false, track: false, cwd: request.cwd })
         return {
           output: [{ type: 'text', text: outcome.agentText }],
           stopReason: mapStopReason(outcome.stopReason),
@@ -548,6 +564,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.inject(['commands'], (commandCtx) => {
     interface AcpCommandInvocation {
       readonly rawInput: string
+      readonly agent?: { readonly session?: unknown }
     }
     interface AcpCommandResult {
       kind: 'success' | 'error'
@@ -568,7 +585,7 @@ export function apply(ctx: Context, config: Config): void {
     ;(commandCtx as Context & { commands: CommandsLike }).commands.register({
       name: ACP_COMMAND_NAME,
       description: 'ACP 智能体：/znacp 看用法；/znacp <agentId> <消息> 直接对话（自动延续上次会话）。',
-      handler: async ({ rawInput }): Promise<AcpCommandResult> => {
+      handler: async ({ rawInput, agent: invocationAgent }): Promise<AcpCommandResult> => {
         const input = rawInput.trim()
         const agents = config.agents.get()
         const usageBlock = [
@@ -623,15 +640,16 @@ export function apply(ctx: Context, config: Config): void {
         }
         try {
           // 标注"延续/新会话":显式会话或自动延续都算延续;其余是新会话。
+          const cmdCwd = agentSessionCwd(invocationAgent) ?? process.cwd()
           const autoTarget = sessionMatch || wantsFresh
             ? undefined
-            : (await sessionIndex.latestFor(agent.id, agent.workingDirectory))?.sessionId
+            : (await sessionIndex.latestFor(agent.id, cmdCwd))?.sessionId
           const outcome = await runAgentTurn(
             agent,
             prompt,
             sessionMatch
-              ? { sessionId: sessionMatch.sessionId }
-              : { ...(wantsFresh ? { resume: false } : {}) },
+              ? { sessionId: sessionMatch.sessionId, cwd: cmdCwd }
+              : { ...(wantsFresh ? { resume: false } : { cwd: cmdCwd }) },
           )
           const mode = sessionMatch !== undefined || outcome.sessionId === autoTarget ? '延续会话' : '新会话'
           const footer = `\n\n（${agent.id} · ${mode} ${shortId(outcome.sessionId)}… · 想开新会话说 /${ACP_COMMAND_NAME} new ${agent.id} <消息>）`

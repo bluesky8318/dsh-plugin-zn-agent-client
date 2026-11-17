@@ -26,7 +26,7 @@ export interface AgentConfig {
   /** Additional environment variables. */
   env: Readonly<Record<string, string>>
   /** Working directory (empty = workspace root). */
-  workingDirectory: string
+  workingDirectory?: string
   /** Optional API key configuration for API-key auth agents. */
   apiKey?: {
     /** DSH secret storage key. */

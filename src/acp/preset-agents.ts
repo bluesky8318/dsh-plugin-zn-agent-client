@@ -21,7 +21,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'claude-agent-acp',
     args: [],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'ANTHROPIC_API_KEY',
       envVarName: 'ANTHROPIC_API_KEY',
@@ -34,7 +33,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'codex-acp',
     args: [],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'OPENAI_API_KEY',
       envVarName: 'OPENAI_API_KEY',
@@ -47,7 +45,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'gemini',
     args: ['--experimental-acp'],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'GEMINI_API_KEY',
       envVarName: 'GEMINI_API_KEY',
@@ -60,7 +57,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'opencode',
     args: ['acp'],
     env: {},
-    workingDirectory: '',
   },
   // kiro-cli
   {
@@ -69,7 +65,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'kiro-cli',
     args: ['acp'],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'KIRO_API_KEY',
       envVarName: 'KIRO_API_KEY',
@@ -82,7 +77,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'hermes',
     args: ['acp'],
     env: {},
-    workingDirectory: '',
   },
   // pi-acp
   {
@@ -91,7 +85,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'pi-acp',
     args: [],
     env: {},
-    workingDirectory: '',
   },
   // grok-build
   {
@@ -100,7 +93,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'grok',
     args: ['agent', 'stdio'],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'XAI_API_KEY',
       envVarName: 'XAI_API_KEY',
@@ -113,7 +105,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'bob',
     args: ['acp'],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'BOBSHELL_API_KEY',
       envVarName: 'BOBSHELL_API_KEY',
@@ -126,7 +117,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'agy',
     args: ['acp'],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'GEMINI_API_KEY',
       envVarName: 'GEMINI_API_KEY',
@@ -139,7 +129,6 @@ export const presetAgents: AgentConfig[] = [
     command: 'vibe-acp',
     args: [],
     env: {},
-    workingDirectory: '',
     apiKey: {
       secretId: 'MISTRAL_API_KEY',
       envVarName: 'MISTRAL_API_KEY',
