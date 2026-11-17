@@ -12,6 +12,32 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
 import { ACP_COMMAND_BASE } from './constants.ts'
 
+/** registerShellOverlay 捕获的布局探测函数（组件通过它请求打开设置页）。 */
+let layoutProbe: (() => boolean) | null = null
+
+/**
+ * 运行时探测宿主的主面板：依次尝试 settings/plugins 候选 id。
+ * DSH 客户端没有开放的"打开设置页"API（layout.selectPanel 需要已注册的
+ * panel id，id 不可枚举）——未注册的 id 会抛出可捕获的错误，借此探测。
+ * @param ctx - 客户端上下文。
+ * @returns 是否成功打开。
+ */
+function probeSettingsPanel(ctx: Context): boolean {
+  try {
+    const layout = (ctx as unknown as { get?(key: string): unknown }).get?.('layout') as
+      | { selectPanel?: (panelId: string) => void }
+      | undefined
+    if (layout === null || typeof layout?.selectPanel !== 'function') return false
+    for (const candidate of ['settings', 'plugins']) {
+      try {
+        layout.selectPanel(candidate)
+        return true
+      } catch { /* 未注册的面板 id，试下一个 */ }
+    }
+  } catch { /* layout 服务缺失（旧宿主） */ }
+  return false
+}
+
 /** 触发浮层打开的 document 事件名。 */
 export const OPEN_LAUNCHER_EVENT = 'znac:open-launcher'
 
@@ -58,6 +84,7 @@ type OverlayProps = PropsRuntime<'shell.overlay'> &
  * @param controller - 配置表单控制器（读 agent 列表）。
  */
 export function registerShellOverlay(ctx: Context, controller: ConfigFormController): void {
+  layoutProbe = () => probeSettingsPanel(ctx)
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'znacp-agent-launcher',
@@ -74,11 +101,12 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
   const { t, useTemplateConfig } = props
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState<string | null>(null)
+  const [settingsNote, setSettingsNote] = useState(false)
   const cardRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     // 触发按钮是开关：再点一次收起（与焦点离开逻辑互不打架）。
-    const onOpen = (): void => { setOpen((current) => !current) }
+    const onOpen = (): void => { setSettingsNote(false); setOpen((current) => !current) }
     document.addEventListener(OPEN_LAUNCHER_EVENT, onOpen)
     return () => { document.removeEventListener(OPEN_LAUNCHER_EVENT, onOpen) }
   }, [])
@@ -87,6 +115,14 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
 
   const close = useCallback(() => { setOpen(false) }, [])
+  const openSettings = useCallback(() => {
+    if (layoutProbe?.() === true) {
+      setSettingsNote(false)
+      close()
+      return
+    }
+    setSettingsNote(true)
+  }, [close])
 
   useEffect(() => {
     if (!open) return
@@ -131,8 +167,13 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
       <div ref={cardRef} className="znac-launcher" role="dialog" aria-label={t('launcher.title')}>
         <div className="znac-overlay-head">
           <span className="znac-launcher-title">{t('launcher.title')}</span>
-          <button type="button" className="znac-overlay-close" aria-label={t('launcher.close')} onClick={close}>×</button>
+          <span className="znac-overlay-headbtns">
+            <button type="button" className="znac-overlay-close" aria-label={t('launcher.settings')} title={t('launcher.settings')} onClick={openSettings}>⚙</button>
+            <button type="button" className="znac-overlay-close" aria-label={t('launcher.close')} onClick={close}>×</button>
+          </span>
         </div>
+        {settingsNote && <p className="znac-launcher-setnote" role="status">{t('launcher.settingsHint')}</p>}
+        <div className="znac-launcher-body">
         <p className="znac-launcher-hint">{t('launcher.hint')}</p>
         {agents.length === 0 ? (
           <p className="znac-launcher-empty">{t('launcher.empty')}</p>
@@ -153,6 +194,7 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
             ))}
           </ul>
         )}
+        </div>
       </div>
     </div>
   )

@@ -25,7 +25,7 @@ export type ZnAgentClientLocaleKey =
   | 'field.logEvents.label' | 'field.logEvents.hint'
   // agent picker 浮层
   | 'launcher.title' | 'launcher.close' | 'launcher.empty' | 'launcher.hint'
-  | 'launcher.copy' | 'launcher.copied'
+  | 'launcher.copy' | 'launcher.copied' | 'launcher.settings' | 'launcher.settingsHint'
   | 'launcher.terminal' | 'launcher.terminalOpening' | 'launcher.terminalOpened'
   | 'launcher.terminalNoSession' | 'launcher.terminalFailed'
   // 侧栏底栏按钮组
@@ -79,6 +79,8 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
   'launcher.hint': 'Paste a snippet into any DSH session. Calls auto-continue the agent\'s latest session; prefix with new for a fresh one (/znacp new qoder hi). Run /znacp sessions to browse history.',
   'launcher.copy': 'Copy /znacp snippet',
+  'launcher.settings': 'Plugin settings',
+  'launcher.settingsHint': 'Settings entry not found — open Settings → Plugins → ACP Agent Client from the sidebar.',
   'launcher.copied': 'Copied',
   'launcher.terminal': 'Terminal',
   'launcher.terminalOpening': 'Opening terminal…',
@@ -154,6 +156,8 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'launcher.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
   'launcher.hint': '把片段粘到任意 DSH 会话即可。对话会自动延续该 agent 最近的会话;想开新会话加 new 前缀(/znacp new qoder 你好)。输入 /znacp sessions 可查历史会话。',
   'launcher.copy': '复制 /znacp 片段',
+  'launcher.settings': '插件设置',
+  'launcher.settingsHint': '未找到设置入口，请从侧栏「设置 → 插件 → ACP 智能体」打开。',
   'launcher.copied': '已复制',
   'launcher.terminal': '终端',
   'launcher.terminalOpening': '正在打开终端…',

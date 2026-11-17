@@ -90,7 +90,27 @@ const CSS = `
   font-size: 13px;
   line-height: 20px;
   box-shadow: var(--dsw-elevation-panel);
-  overflow: auto;
+  /* 头部固定、只有列表区滚动（overflow:auto 在卡片上会让标题跟着滚出去）。 */
+  overflow: hidden;
+}
+.znac-launcher-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.znac-overlay-headbtns {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.znac-launcher-setnote {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
 }
 .znac-overlay-head {
   display: flex;
