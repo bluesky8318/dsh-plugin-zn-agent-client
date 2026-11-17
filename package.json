@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-zn-agent-client",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "DSH plugin that adds ACP (Agent Client Protocol) capability: invoke local CLI agents (Claude Code, Codex, Gemini CLI, opencode, etc.) over stdio from within DeepSeek Harness.",
   "keywords": [
     "deepseek-harness",
