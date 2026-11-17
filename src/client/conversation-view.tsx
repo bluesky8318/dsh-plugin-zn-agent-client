@@ -381,15 +381,18 @@ function EmbeddedTerminal(props: {
     return () => { session.detach() }
   }, [session, scheme])
 
+  // 连接中也要渲染终端容器：attach 才会创建 xterm（惰性），若整个容器被
+  // 占位文案替代，snapshot 会因终端不存在而被丢弃——phase 永远停在
+  // connecting（点开新会话一直「正在启动 CLI」的死锁根源）。
   if (session === null) return <p className="znac-view-empty">{launchingLabel}</p>
-  if (state === undefined || state.phase === 'connecting') {
-    return <p className="znac-view-empty">{launchingLabel}</p>
-  }
 
   return (
-    <div className="znac-view-term" data-phase={state.phase}>
+    <div className="znac-view-term" data-phase={state?.phase ?? 'connecting'}>
       <div ref={hostRef} className="znac-agent-term" aria-label={displayName} />
-      {state.phase === 'exited' && (
+      {(state === undefined || state.phase === 'connecting') && (
+        <p className="znac-view-empty">{launchingLabel}</p>
+      )}
+      {state?.phase === 'exited' && (
         <div className="znac-view-term-note" role="status">
           <span>{state.error !== '' ? `${errorLabel}: ${state.error}` : exitedLabel}</span>
           <button type="button" className="znac-view-restart" onClick={() => { void session.restart() }}>
