@@ -207,7 +207,8 @@ export function apply(ctx: Context, config: Config): void {
           void route.handler(req, res).catch((error: unknown) => {
             if (res.headersSent !== true) {
               res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
-              res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error) }))
+              const stack = error instanceof Error ? error.stack : undefined
+              res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), stack }))
             }
           })
         },
