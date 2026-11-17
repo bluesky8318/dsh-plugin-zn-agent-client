@@ -3,6 +3,8 @@
 All notable changes to this project are documented in this file.
 Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+English | [中文](CHANGELOG.zh.md)
+
 ## [0.2.0] - 2026-11-17
 
 ### Added
