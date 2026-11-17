@@ -36,7 +36,8 @@ export const ROUTES = {
 
 /** 宿主 webServer 服务的结构面（dsh-host-webserver）。 */
 export interface WebServerFace {
-  register(route: { kind: string; path: string; handler: (req: RouteRequest, res: RouteResponse) => void }): void
+  /** 返回注销函数（dsh-host-webserver：table.delete(path)）；路径重复时抛错。 */
+  register(route: { kind: string; path: string; handler: (req: RouteRequest, res: RouteResponse) => void }): () => void
 }
 
 /** IncomingMessage 的结构面。 */

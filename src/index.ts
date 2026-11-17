@@ -28,7 +28,7 @@ import type { AgentConfig } from './types/index.ts'
 export const name = 'dsh-plugin-zn-agent-client'
 
 /** 依赖的宿主服务：tools 注册工具，subagents 注册子代理提供方。 */
-export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory']
+export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions']
 
 /** 插件配置（设置命名空间由 cordis.patch.yml 行 id 派生）。 */
 export interface Config {
@@ -116,17 +116,22 @@ export function apply(ctx: Context, config: Config): void {
     log,
   })
 
-  /** 宿主 workingDirectory 服务句柄（ctx.inject 异步到达）；用于把工具调用的
-   * 工作目录解析到当前工作区（session cwd）。 */
-  let cwdFace: { get(sessionId: unknown): string | undefined } | undefined
+  // 宿主服务直读：apply 在 inject 声明的服务全部就绪后才运行，ctx 是长活上下文。
+  // 千万不要经 ctx.inject 回调的 fiber 上下文取服务——回调结束后该上下文不活跃，
+  // 请求期再读会抛 cannot get required service ... in inactive context。
+  const hostCtx = ctx as Context & {
+    workingDirectory?: { defaultDirectory?: string; get(session: unknown): string }
+    sessions?: { get?(id: string): unknown }
+  }
+  const cwdFace = hostCtx.workingDirectory
   /** 从工具运行上下文解析调用方会话的工作目录；解析不到时退回进程 cwd。 */
   const sessionCwd = (exec: { agent?: { session?: unknown } }): string | undefined => {
     return agentSessionCwd(exec.agent)
   }
-  /** 从（命令/工具的）调用方 agent 解析会话工作目录。 */
+  /** 从（命令/工具的）调用方 agent 解析会话工作目录（agent.session 是活会话对象）。 */
   const agentSessionCwd = (agent: { readonly session?: unknown } | undefined): string | undefined => {
     const session = agent?.session
-    if (session === undefined || session === null || typeof session !== 'string') return undefined
+    if (session === undefined || session === null) return undefined
     return cwdFace?.get(session)
   }
 
@@ -135,11 +140,7 @@ export function apply(ctx: Context, config: Config): void {
   }, `${name}: acp manager lifecycle`)
 
   // TypertRemote 服务：浏览器半边「在外部终端打开」按钮的宿主接收端。
-  // workingDirectory 走可选注入（服务未组成时回调不执行，远端退回配置目录）。
-  ctx.inject(['workingDirectory'], (inner) => {
-    cwdFace = (inner as Context & { workingDirectory?: { get(sessionId: unknown): string | undefined } }).workingDirectory
-    void createZnAgentClientRemote(ctx, (agentKey) => resolveAgentConfig(agentKey) ?? undefined, cwdFace)
-  })
+  void createZnAgentClientRemote(ctx, (agentKey) => resolveAgentConfig(agentKey) ?? undefined, cwdFace)
 
   /** 解析要用的 agent：显式 id > 默认 id > 清单第一个。 */
   const resolveAgentConfig = (agentId?: string): AgentConfig | null => {
@@ -155,73 +156,68 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   // CLI Agent 终端宿主（dsh-agents-cli 同款架构）：subprocess PTY + 自有 SSE 路由。
-  // webServer/subprocess 是宿主核心服务，缺失则整个特性不可用——直接声明依赖。
-  ctx.inject(['subprocess', 'webServer', 'workingDirectory', 'sessions'], (inner) => {
-    // 在回调内就把服务“解引用”成实例——回调作用域上下文在请求期可能已不活跃
-    // （cannot get required service ... in inactive context），不能存 inner 本身。
-    const cliCtx = inner as Context & {
-      subprocess?: SubprocessFace
-      webServer?: WebServerFace
-      // workingDirectory.get 只接受“活会话对象”（投影 cellFor 直接读
-      // session.snapshotEvents()，传 id 字符串会抛 snapshotEvents is not a function）。
-      workingDirectory?: { defaultDirectory?: string; get?(session: unknown): string }
-      sessions?: { get?(id: string): unknown }
-    }
-    const subprocess = cliCtx.subprocess
-    const webServer = cliCtx.webServer
-    const workingDir = cliCtx.workingDirectory
-    const sessions = cliCtx.sessions
-    if (subprocess === undefined || webServer === undefined) {
-      log('CLI 终端宿主不可用：缺少 subprocess/webServer 服务')
-      return
-    }
-    const defaultCwd = (): string => workingDir?.defaultDirectory ?? process.cwd()
-    const controller = new CliTerminalController(subprocess, defaultCwd)
-
+  // webServer/subprocess 是宿主核心服务，apply 时已随 inject 就绪；缺失仅停用终端特性。
+  const cliSubprocess = (ctx as Context & { subprocess?: SubprocessFace }).subprocess
+  const cliWebServer = (ctx as Context & { webServer?: WebServerFace }).webServer
+  if (cliSubprocess === undefined || cliWebServer === undefined) {
+    log('CLI 终端宿主不可用：缺少 subprocess/webServer 服务')
+  } else {
+    const defaultCwd = (): string => cwdFace?.defaultDirectory ?? process.cwd()
+    const controller = new CliTerminalController(cliSubprocess, defaultCwd)
     for (const route of createCliTerminalRoutes(controller, {
       resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
       defaultCwd,
-      // id 字符串必须先经 sessions.get 解析成会话对象，再交给 workingDirectory.get。
+      // id 字符串必须先经 sessions.get 解析成会话对象，再交给 workingDirectory.get
+      // （投影 cellFor 直接读 session.snapshotEvents()，传字符串会抛
+      // session.snapshotEvents is not a function）。
       resolveSessionCwd: (sessionId: string) => {
-        const session = sessions?.get?.(sessionId)
-        return session === undefined ? undefined : workingDir?.get?.(session)
+        const session = hostCtx.sessions?.get?.(sessionId)
+        return session === undefined ? undefined : cwdFace?.get(session)
       },
     })) {
-      ctx.effect(() => {
-        webServer.register({
-        kind: 'exact',
-        path: route.path,
-        handler: (req: RouteRequest, res: RouteResponse): void => {
-          // 'exact' 路由仍会收到其他路径/方法的请求，照参考插件做二次校验。
-          const pathname = (req.url ?? '').split('?')[0]
-          if (pathname !== route.path) {
-            res.writeHead(404)
-            res.end()
-            return
-          }
-          if (req.method !== route.method) {
-            res.writeHead(405, { allow: route.method })
-            res.end()
-            return
-          }
-          void route.handler(req, res).catch((error: unknown) => {
-            if (res.headersSent !== true) {
-              res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
-              const stack = error instanceof Error ? error.stack : undefined
-              res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), stack }))
-            }
+      // effect 回调直接返回 webServer.register 的结果——它就是注销函数，
+      // 插件停用/重载时由 cordis 调用，避免旧路由残留（旧闭包上下文已死，
+      // 会报 cannot get required service ... in inactive context）。
+      ctx.effect(
+        () => {
+          let dispose: (() => void) | undefined
+          try {
+            dispose = cliWebServer.register({
+            kind: 'exact',
+            path: route.path,
+            handler: (req: RouteRequest, res: RouteResponse): void => {
+              // 'exact' 路由仍会收到其他路径/方法的请求，照参考插件做二次校验。
+              const pathname = (req.url ?? '').split('?')[0]
+              if (pathname !== route.path) {
+                res.writeHead(404)
+                res.end()
+                return
+              }
+              if (req.method !== route.method) {
+                res.writeHead(405, { allow: route.method })
+                res.end()
+                return
+              }
+              void route.handler(req, res).catch((error: unknown) => {
+                if (res.headersSent !== true) {
+                  res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+                  const stack = error instanceof Error ? error.stack : undefined
+                  res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), stack }))
+                }
+              })
+            },
           })
+          } catch (error) {
+            // 旧周期遗留的未注销路由会触发 duplicate；一次性完全重启应用才能清掉。
+            log(`路由 ${route.path} 注册失败（可能有旧周期残留路由，需重启应用一次）：${error instanceof Error ? error.message : String(error)}`)
+          }
+          return () => { dispose?.() }
         },
-        })
-        // 路由由宿主 webServer 的 effect 生命周期管理；这里返回空清理保持签名。
-        return () => {}
-      }, `${name}: ${route.method} ${route.path}`)
+        `${name}: ${route.method} ${route.path}`,
+      )
     }
-
-    ctx.effect(() => () => {
-      void controller.dispose()
-    }, `${name}: cli terminal controller lifecycle`)
-  })
+    ctx.effect(() => () => controller.dispose(), `${name}: cli terminal controller`)
+  }
 
   /**
    * 会话索引:ACP 会话历史存在 agent 侧(见 session-index.ts 模块注释),

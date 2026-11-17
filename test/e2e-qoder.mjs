@@ -16,6 +16,7 @@ const registeredTools = []
 const providers = []
 const cleanups = []
 const ctx = {
+  reflect: { provide() {} }, // Service 基类（remote-service）需要
   tools: { register(d) { registeredTools.push(d); return () => {} } },
   subagents: { registerProvider(p) { providers.push(p); return () => {} } },
   inject() {}, // commands 服务未组合，/znacp 命令注册会被跳过
@@ -108,6 +109,7 @@ assert.ok(sessions.sessions.some(s => s.sessionId === remember.sessionId), 'sess
 for (const dispose of cleanups.reverse()) await dispose()
 const tools2 = []
 const ctx2 = {
+  reflect: { provide() {} },
   tools: { register(d) { tools2.push(d); return () => {} } },
   subagents: { registerProvider() { return () => {} } },
   inject() {},

@@ -14,6 +14,17 @@ const registeredCommands = []
 const registeredRoutes = []
 const emitted = []
 const ctx = {
+  // Service 基类需要 ctx.reflect.provide（cordis 内部注册自省）。
+  reflect: { provide() {} },
+  subprocess: {},
+  webServer: {
+    register(route) {
+      registeredRoutes.push(route.path)
+      return () => {}
+    },
+  },
+  workingDirectory: { defaultDirectory: process.cwd() },
+  sessions: { get() { return undefined } },
   tools: {
     register(definition) {
       registeredTools.push(definition)
@@ -28,15 +39,6 @@ const ctx = {
   },
   // 可选服务的组合点：本插件用它挂 /znacp 命令。
   inject(services, fn) {
-    if (services.includes('subprocess') && services.includes('webServer')) {
-      // CLI 终端宿主面：stub 只验证注册路径，不真的 spawn。
-      fn({
-        subprocess: {},
-        webServer: { register(route) { registeredRoutes.push(route.path); return () => {} } },
-        workingDirectory: { defaultDirectory: process.cwd() },
-      })
-      return
-    }
     if (services.includes('commands')) {
       fn({
         commands: {
@@ -83,7 +85,7 @@ const config = {
 apply(ctx, config)
 
 assert.equal(name, 'dsh-plugin-zn-agent-client')
-assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory'])
+assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions'])
 
 assert.ok(registeredTools.some(t => t.name === 'list_acp_agents'), 'list_acp_agents should be registered')
 assert.ok(registeredTools.some(t => t.name === 'call_acp_agent'), 'call_acp_agent should be registered')
