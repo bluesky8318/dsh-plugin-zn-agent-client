@@ -371,6 +371,16 @@ const CSS = `
   display: none !important;
 }
 
+/* 宿主的对话宽度拖拽条（ConversationRoot.module.css 的 .widthHandle，
+   data-side=left|right，cursor:col-resize，绝对定位在对话 body 两侧）：
+   类名被 CSS modules 哈希不可引用，但 data-side 属性稳定。CLI 视图占满
+   可视带时拖拽条无意义还压在终端左右边缘 —— html:has 联动隐藏，切回
+   对话视图自动恢复。 */
+html:has([data-znacp-cli-view]) [data-side='left'],
+html:has([data-znacp-cli-view]) [data-side='right'] {
+  display: none !important;
+}
+
 .znac-view {
   display: flex;
   flex-direction: column;
