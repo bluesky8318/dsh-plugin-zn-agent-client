@@ -145,6 +145,9 @@ export function buildTerminalEnv(baseEnv: NodeJS.ProcessEnv): Record<string, str
   }
   env.TERM = 'xterm-256color'
   env.COLORTERM = 'truecolor'
+  // 归属标记：插件拉起的终端进程都带这个变量，便于精确识别、绝不误伤
+  // 用户在其他终端手工打开的 CLI（清理只针对插件自己 tracking 的句柄）。
+  env.ZN_AGENT_CLIENT_OWNED = '1'
   return env
 }
 
