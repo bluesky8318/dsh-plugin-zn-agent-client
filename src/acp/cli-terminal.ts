@@ -120,20 +120,19 @@ export function buildShellLaunch(shellPath: string, platform: NodeJS.Platform = 
 
 /**
  * 把 CLI 命令包进一次性的交互 shell 启动：`-c` 在 shell 初始化**完成后**执行命令
- * （zsh/bash 的重配置不再产生「命令敲早了被吞」的竞态），命令退出后 `exec` 回
- * 一个全新交互登录 shell —— 保留「CLI 退出后 shell 还在」的习惯。
+ * （zsh/bash 的重配置不再产生「命令敲早了被吞」的竞态）。CLI 退出后 -c shell
+ * 随之退出 —— 不留悬挂 shell，终端转为 exited，由「重启/新会话」重新拉起。
  * 命令为空时退化为普通登录 shell。
  */
 export function buildAgentShellLaunch(shellPath: string, command: string): { path: string; name: string; argv: string[] } {
   const kind = shellKind(shellPath)
   const line = command.trim()
   if (line === '') return buildShellLaunch(shellPath)
-  const quoted = `'${shellPath.replaceAll("'", `'\\''`)}'`
   if (kind === 'cmd') return { path: shellPath, name: kind, argv: [shellPath, '/d', '/c', line] }
   if (kind === 'pwsh' || kind === 'powershell') return { path: shellPath, name: kind, argv: [shellPath, '-NoLogo', '-Command', line] }
-  if (kind === 'fish') return { path: shellPath, name: kind, argv: [shellPath, '-i', '-C', line] }
-  if (kind === 'zsh' || kind === 'bash') return { path: shellPath, name: kind, argv: [shellPath, '-il', '-c', `${line}; exec ${quoted} -il`] }
-  return { path: shellPath, name: kind || 'sh', argv: [shellPath, '-i', '-c', `${line}; exec ${quoted} -i`] }
+  if (kind === 'fish') return { path: shellPath, name: kind, argv: [shellPath, '-i', '-c', line] }
+  if (kind === 'zsh' || kind === 'bash') return { path: shellPath, name: kind, argv: [shellPath, '-il', '-c', line] }
+  return { path: shellPath, name: kind || 'sh', argv: [shellPath, '-i', '-c', line] }
 }
 
 /** 组装 spawnTerminal 的 env：剥掉 Electron/DSH 桌面注入，补终端变量。 */
@@ -468,7 +467,7 @@ export class CliTerminalController {
     const cwd = typeof options.cwd === 'string' && options.cwd !== '' ? options.cwd : this.defaultCwd()
     const shellPath = await resolveUserShell(this.subprocess)
     const launchLine = options.launchLine !== undefined && options.launchLine !== '' ? options.launchLine : options.command
-    // 命令直接由 shell 的 -c 启动：初始化完成才执行，退出后 exec 回交互 shell。
+    // 命令直接由 shell 的 -c 启动：初始化完成才执行，CLI 退出后 shell 一并退出。
     // 不再「先起 shell 再敲命令」——那条路有敲早被吞的竞态（CLI 退出后点新会话
     // 只见 shell 不见 CLI 的根因）。
     const launch = buildAgentShellLaunch(shellPath, launchLine)
