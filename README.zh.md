@@ -11,7 +11,38 @@ ACP 连接层移植自 [obsidian-agent-client](https://github.com/rait-09/obsidi
 
 ## 安装
 
-在 DSH 插件页从源码安装 bundle（或 `plugin_manager install_bundle`），然后启用 `dsh-plugin-zn-agent-client` 行。
+三种方式任选其一。
+
+### 插件页手动安装
+
+1. Clone 本仓库，或记住 Git 地址 `https://github.com/bluesky8318/dsh-plugin-zn-agent-client.git`。
+2. 打开 **设置 → 插件**，点 **添加插件**（`＋` 按钮）→ **安装第三方插件**。
+3. 输入安装 spec —— 本地源码目录、上面的 Git 地址、或 npm 包名 —— 确认安装。
+4. 在列表里启用 `dsh-plugin-zn-agent-client` 行。
+
+### `dsh` 命令行安装
+
+```sh
+git clone https://github.com/bluesky8318/dsh-plugin-zn-agent-client.git
+dsh plugin --profile desktop add /path/to/dsh-plugin-zn-agent-client
+# 也可以直接从 Git 装：
+dsh plugin --profile desktop add https://github.com/bluesky8318/dsh-plugin-zn-agent-client.git
+```
+
+这只把包装进 profile；装完还需在插件页启用。
+
+### 让 DSH 智能体安装
+
+在任意 DSH 会话里说一句即可，智能体会代为执行：
+
+```text
+请安装并启用插件 dsh-plugin-zn-agent-client：
+从 GitHub 仓库 bluesky8318/dsh-plugin-zn-agent-client 安装 bundle。
+```
+
+（或指向本地 clone：`从本地目录 /path/to/dsh-plugin-zn-agent-client 安装 bundle 并启用`。）
+
+智能体会使用 `plugin_manager` 工具（先 `install_bundle` 安装、再 `set_plugin` 启用），安装前会向你请求批准。
 
 ## 配置
 

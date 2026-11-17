@@ -11,7 +11,38 @@ The ACP connection layer is ported from [obsidian-agent-client](https://github.c
 
 ## Install
 
-Install the bundle from source via the DSH Plugins page (or `plugin_manager install_bundle`), then enable the `dsh-plugin-zn-agent-client` row.
+Three ways to install; pick one.
+
+### From the Plugins page (manual)
+
+1. Clone this repo, or note the Git URL `https://github.com/bluesky8318/dsh-plugin-zn-agent-client.git`.
+2. Open **Settings → Plugins** and click **Add plugin** (the `＋` button) → **Install a third-party plugin**.
+3. Enter the install spec — a local source directory, the Git URL above, or an npm package name — and confirm.
+4. Enable the `dsh-plugin-zn-agent-client` row in the list.
+
+### From the `dsh` CLI
+
+```sh
+git clone https://github.com/bluesky8318/dsh-plugin-zn-agent-client.git
+dsh plugin --profile desktop add /path/to/dsh-plugin-zn-agent-client
+# …or straight from Git:
+dsh plugin --profile desktop add https://github.com/bluesky8318/dsh-plugin-zn-agent-client.git
+```
+
+This adds the package into the profile; enable it on the Plugins page afterwards.
+
+### Ask the DSH agent
+
+Say it in any DSH session — the agent runs the install for you:
+
+```text
+请安装并启用插件 dsh-plugin-zn-agent-client：
+从 GitHub 仓库 bluesky8318/dsh-plugin-zn-agent-client 安装 bundle。
+```
+
+(or point it at a local clone: `从本地目录 /path/to/dsh-plugin-zn-agent-client 安装 bundle 并启用`.)
+
+The agent uses the `plugin_manager` tool (`install_bundle`, then `set_plugin` to enable) and will ask for your approval before installing.
 
 ## Configure
 
