@@ -29,13 +29,15 @@ export interface CliSessionEntry {
   readonly summary: string
   readonly updatedAt: string
   readonly source: 'cli' | 'index'
+  /** 会话自己的工作目录（jsonl 头记录）；resume 时原样传给 /open 纠正 spawn cwd。 */
+  readonly cwd?: string
 }
 
 /** 会话动作（新会话/继续最近/还原指定会话）。 */
 export type SessionAction =
   | { readonly mode: 'new' }
   | { readonly mode: 'continue' }
-  | { readonly mode: 'resume'; readonly resumeTarget: string }
+  | { readonly mode: 'resume'; readonly resumeTarget: string; readonly cwd?: string }
 
 /** 服务端环境上限（snapshot 帧里的 environment 同构）。 */
 interface TermEnvironment {
@@ -280,6 +282,7 @@ export class AgentTerminalSession {
     restart?: boolean
     mode?: 'attach' | 'new' | 'continue' | 'resume'
     resumeTarget?: string
+    cwd?: string
   } = {}): Promise<void> {
     if (this.disposed) return
     const dims = this.currentDimensions()
@@ -295,6 +298,7 @@ export class AgentTerminalSession {
           restart: options.restart === true,
           mode: options.mode,
           resumeTarget: options.resumeTarget,
+          ...(options.cwd !== undefined && options.cwd !== '' ? { cwd: options.cwd } : {}),
         }),
       })
       if (!opened.ok) {
@@ -318,7 +322,7 @@ export class AgentTerminalSession {
     this.lastAction = { ...action, label }
     await this.connect(
       action.mode === 'resume'
-        ? { restart: true, mode: 'resume', resumeTarget: action.resumeTarget }
+        ? { restart: true, mode: 'resume', resumeTarget: action.resumeTarget, ...(action.cwd !== undefined ? { cwd: action.cwd } : {}) }
         : { restart: true, mode: action.mode },
     )
   }

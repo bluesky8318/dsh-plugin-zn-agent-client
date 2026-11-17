@@ -19,7 +19,7 @@ import {
   type SseResponse,
   type TerminalStatus,
 } from './cli-terminal.ts'
-import { buildLaunchPlan, listAgentSessions, type SessionMode } from './cli-sessions.ts'
+import { buildLaunchPlan, listAgentSessions, resolveSessionWorktree, type SessionMode } from './cli-sessions.ts'
 
 /** 插件路由防误触头（照参考插件的静态头约定）。 */
 export const GUARD_HEADER = 'x-zn-agent-client'
@@ -135,14 +135,23 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
       : undefined
     const rawMode = typeof body.mode === 'string' ? (body.mode as SessionMode) : 'attach'
     const mode: SessionMode = rawMode === 'new' || rawMode === 'continue' || rawMode === 'resume' ? rawMode : 'attach'
-    const plan = buildLaunchPlan(agent, mode, typeof body.resumeTarget === 'string' ? body.resumeTarget : undefined)
+    const resumeTarget = typeof body.resumeTarget === 'string' ? body.resumeTarget : undefined
+    const plan = buildLaunchPlan(agent, mode, resumeTarget)
+    // resume 的 cwd 优先级：客户端显式 cwd（历史条目自带的会话工作区）>
+    // 按会话 id 反查的记录工作区 > 当前会话工作区 > 默认目录。CLI 的 resume
+    // 按 worktree 匹配会话，spawn 错目录会报 No sessions found matching …。
+    let resumeWorktree: string | undefined
+    if (mode === 'resume' && resumeTarget !== undefined && resumeTarget !== '') {
+      resumeWorktree = (await resolveSessionWorktree(agent.command, resumeTarget).catch(() => null)) ?? undefined
+    }
+    const bodyCwd = typeof body.cwd === 'string' && body.cwd !== '' ? body.cwd : undefined
     try {
       const term = await controller.openTerminal({
         id: agent.id,
         agentId: agent.id,
         displayName: agent.displayName,
         command: agent.command,
-        cwd: fromSession ?? options.defaultCwd(),
+        cwd: bodyCwd ?? resumeWorktree ?? fromSession ?? options.defaultCwd(),
         cols: body.cols,
         rows: body.rows,
         restart: body.restart === true,

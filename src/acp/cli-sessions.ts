@@ -30,6 +30,8 @@ export interface CliSessionEntry {
   summary: string
   updatedAt: string
   source: 'cli' | 'index'
+  /** 会话自己的工作目录（jsonl 头里记录的 workspace）；resume 必须回到这个目录。 */
+  cwd?: string
 }
 
 /** resume 时各 CLI 的 flag 形态（按命令 basename 匹配）。 */
@@ -191,6 +193,38 @@ async function firstUserSummary(filePath: string, fallback: string): Promise<str
   return fallback
 }
 
+/**
+ * 从会话 jsonl 前 64KB 里解析会话自己的工作目录：
+ * qoder 头行是 {type:'workspace-directories', directories:[…]}；claude 行内带 cwd 字段。
+ * 拿不到返回 null（调用方退回其它 cwd 来源）。
+ */
+async function firstWorkspaceDir(filePath: string): Promise<string | null> {
+  const handle = await fs.open(filePath, 'r').catch(() => null)
+  if (handle === null) return null
+  try {
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(65_536), 0, 65_536, 0)
+    for (const line of buffer.toString('utf8', 0, bytesRead).split('\n')) {
+      if (line.trim() === '') continue
+      let parsed: Record<string, unknown>
+      try {
+        parsed = JSON.parse(line) as Record<string, unknown>
+      } catch {
+        continue
+      }
+      if (parsed.type === 'workspace-directories' && Array.isArray(parsed.directories)) {
+        const first = parsed.directories.find((item): item is string => typeof item === 'string')
+        if (first !== undefined && first !== '') return first
+      }
+      if (typeof parsed.cwd === 'string' && parsed.cwd !== '') return parsed.cwd
+    }
+  } catch {
+    // 尽力而为。
+  } finally {
+    await handle.close().catch(() => {})
+  }
+  return null
+}
+
 /** qoder 的项目目录与 claude 同一 slug 布局（/ → -）。 */
 async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
   const projectDir = join(homedir(), '.qoder', 'projects', claudeSlug(cwd))
@@ -203,10 +237,20 @@ async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
   const entries: CliSessionEntry[] = []
   for (const name of names.filter((file) => file.endsWith('.jsonl')).slice(-20)) {
     const id = name.replace(/\.jsonl$/, '')
+    const filePath = join(projectDir, name)
     try {
-      const stat = await fs.stat(join(projectDir, name))
-      const summary = await firstUserSummary(join(projectDir, name), 'Qoder 会话')
-      entries.push({ id, summary, updatedAt: stat.mtime.toISOString(), source: 'cli' })
+      const stat = await fs.stat(filePath)
+      const [summary, workdir] = await Promise.all([
+        firstUserSummary(filePath, 'Qoder 会话'),
+        firstWorkspaceDir(filePath),
+      ])
+      entries.push({
+        id,
+        summary,
+        updatedAt: stat.mtime.toISOString(),
+        source: 'cli',
+        ...(workdir !== null ? { cwd: workdir } : {}),
+      })
     } catch {
       // 文件刚被删掉就跳过。
     }
@@ -226,16 +270,57 @@ async function listClaudeSessions(cwd: string): Promise<CliSessionEntry[]> {
   const entries: CliSessionEntry[] = []
   for (const name of names.filter((file) => file.endsWith('.jsonl')).slice(-20)) {
     const id = name.replace(/\.jsonl$/, '')
+    const filePath = join(projectDir, name)
     try {
-      const stat = await fs.stat(join(projectDir, name))
-      const summary = await firstUserSummary(join(projectDir, name), 'Claude 会话')
-      entries.push({ id, summary, updatedAt: stat.mtime.toISOString(), source: 'cli' })
+      const stat = await fs.stat(filePath)
+      const [summary, workdir] = await Promise.all([
+        firstUserSummary(filePath, 'Claude 会话'),
+        firstWorkspaceDir(filePath),
+      ])
+      entries.push({
+        id,
+        summary,
+        updatedAt: stat.mtime.toISOString(),
+        source: 'cli',
+        ...(workdir !== null ? { cwd: workdir } : {}),
+      })
     } catch {
       // 文件刚被删掉就跳过。
     }
   }
   entries.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : -1))
   return entries
+}
+
+/**
+ * 按会话 id 反查它自己的工作目录（resume 前把 spawn cwd 纠正回会话所属 worktree）。
+ * qoder/claude 都是 ~/.<cli>/projects/<slug>/<sessionId>.jsonl 布局；查不到返回 null。
+ */
+export async function resolveSessionWorktree(command: string, sessionId: string): Promise<string | null> {
+  const base = commandBasename(command)
+  const roots = base === 'qodercli' || base === 'qoder'
+    ? [join(homedir(), '.qoder', 'projects')]
+    : base === 'claude' ? [join(homedir(), '.claude', 'projects')]
+    : []
+  for (const root of roots) {
+    let projects: string[]
+    try {
+      projects = await fs.readdir(root)
+    } catch {
+      continue
+    }
+    for (const project of projects) {
+      const filePath = join(root, project, `${sessionId}.jsonl`)
+      try {
+        await fs.access(filePath)
+      } catch {
+        continue
+      }
+      const workdir = await firstWorkspaceDir(filePath)
+      if (workdir !== null) return workdir
+    }
+  }
+  return null
 }
 
 /**

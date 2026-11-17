@@ -298,7 +298,7 @@ function formatTime(value: string): string {
                   type="button"
                   role="menuitem"
                   className="znac-view-hist-item"
-                  onClick={() => { runAction({ mode: 'resume', resumeTarget: item.id }, `${t('view.labelResume')} ${shortId(item.id)}`) }}
+                  onClick={() => { runAction({ mode: 'resume', resumeTarget: item.id, ...(item.cwd !== undefined && item.cwd !== '' ? { cwd: item.cwd } : {}) }, `${t('view.labelResume')} ${shortId(item.id)}`) }}
                 >
                   <span className="znac-view-hist-summary">{item.summary}</span>
                   <span className="znac-view-hist-meta">{formatTime(item.updatedAt)}</span>
