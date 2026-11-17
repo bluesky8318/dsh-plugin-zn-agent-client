@@ -51,21 +51,24 @@ export function commandBasename(command: string): string {
 
 /**
  * 把会话动作翻译成要在登录 shell 里敲的完整命令行。
- * attach 模式返回 undefined（沿用 agent 配置的原始命令）。
+ * 所有模式都带 CLI 配置参数（cliArgs，如 --dangerously-skip-permissions）；
+ * attach 模式也显式回传命令行，供新终端直接敲入。
  */
 export function buildLaunchPlan(
-  agent: Pick<AgentConfig, 'command'>,
+  agent: Pick<AgentConfig, 'command' | 'cliArgs'>,
   mode: SessionMode = 'attach',
   resumeTarget?: string,
-): { mode: SessionMode; launchLine?: string } {
+): { mode: SessionMode; launchLine: string } {
   const command = agent.command.trim()
-  if (mode === 'attach' || command === '') return { mode: 'attach' }
-  if (mode === 'new') return { mode, launchLine: command }
-  if (mode === 'continue') return { mode, launchLine: `${command} -c` }
+  const extra = (agent.cliArgs ?? []).map((arg) => arg.trim()).filter((arg) => arg !== '')
+  const base = extra.length > 0 ? `${command} ${extra.join(' ')}` : command
+  if (mode === 'attach' || command === '') return { mode: 'attach', launchLine: base }
+  if (mode === 'new') return { mode, launchLine: base }
+  if (mode === 'continue') return { mode, launchLine: `${base} -c` }
   const target = typeof resumeTarget === 'string' ? resumeTarget.trim() : ''
-  if (target === '') return { mode: 'new', launchLine: command }
+  if (target === '') return { mode: 'new', launchLine: base }
   const flag = RESUME_FLAGS[commandBasename(command)] ?? '-r'
-  return { mode: 'resume', launchLine: `${command} ${flag} ${target}` }
+  return { mode: 'resume', launchLine: `${base} ${flag} ${target}` }
 }
 
 /** execFile 的 Promise 化（默认 10s 超时，失败返回 null）。 */

@@ -21,8 +21,11 @@ export interface AgentConfig {
   displayName: string
   /** Command to spawn the ACP agent, e.g. "claude-agent-acp". */
   command: string
-  /** Additional arguments passed to the command. */
+  /** Additional arguments passed to the command (ACP 模式启动参数）。 */
   args: readonly string[]
+  /** CLI/TUI 会话启动参数（如 claude 的 --dangerously-skip-permissions）；
+   * 仅作用于终端会话与外部终端，不影响 ACP 模式。 */
+  cliArgs?: readonly string[]
   /** Additional environment variables. */
   env: Readonly<Record<string, string>>
   /** Working directory (empty = workspace root). */

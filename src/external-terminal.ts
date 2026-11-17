@@ -38,7 +38,8 @@ function shellQuote(value: string): string {
  */
 export function buildAgentShellLine(agent: AgentConfig, cwdOverride?: string): string {
   const cwd = cwdOverride ?? process.cwd()
-  const parts = [agent.command, ...(agent.args ?? [])].map(shellQuote).join(' ')
+  // 外部终端跑的是 TUI 会话：用 CLI 配置参数（cliArgs），不是 ACP 模式参数。
+  const parts = [agent.command, ...(agent.cliArgs ?? [])].map(shellQuote).join(' ')
   return `cd ${shellQuote(cwd)} && exec ${parts}`
 }
 

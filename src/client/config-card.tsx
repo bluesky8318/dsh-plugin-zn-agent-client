@@ -35,6 +35,7 @@ interface AgentDraft {
   displayName: string
   command: string
   argsText: string
+  cliArgsText: string
   envText: string
   secretId: string
   envVarName: string
@@ -82,6 +83,7 @@ interface AcceptedAgent {
   displayName?: unknown
   command?: unknown
   args?: unknown
+  cliArgs?: unknown
   env?: unknown
   apiKey?: unknown
 }
@@ -98,6 +100,7 @@ function readAgentDraft(agent: AcceptedAgent): AgentDraft {
     displayName: typeof agent.displayName === 'string' ? agent.displayName : '',
     command: typeof agent.command === 'string' ? agent.command : '',
     argsText: Array.isArray(agent.args) ? agent.args.map(String).join(' ') : '',
+    cliArgsText: Array.isArray(agent.cliArgs) ? agent.cliArgs.map(String).join(' ') : '',
     envText: typeof agent.env === 'object' && agent.env !== null && Object.keys(agent.env).length > 0
       ? JSON.stringify(agent.env)
       : '',
@@ -168,6 +171,7 @@ export function agentDraftToValue(agent: AgentDraft): Record<string, unknown> {
     displayName: agent.displayName.trim(),
     command: agent.command.trim(),
     args: parseArgsText(agent.argsText),
+    cliArgs: parseArgsText(agent.cliArgsText),
     env: parseEnvText(agent.envText),
     ...(Object.keys(apiKey).length > 0 ? { apiKey } : {}),
   }
@@ -258,7 +262,7 @@ function SettingsForm(
     setDraft(current => ({
       ...current,
       agents: [...current.agents, {
-        key: nextDraftKey(), id: '', displayName: '', command: '', argsText: '', envText: '', secretId: '', envVarName: '',
+        key: nextDraftKey(), id: '', displayName: '', command: '', argsText: '', cliArgsText: '', envText: '', secretId: '', envVarName: '',
       }],
     }))
   }
@@ -344,6 +348,15 @@ function SettingsForm(
                 disabled={!editable}
                 placeholder="--acp"
                 onChange={(event) => { updateAgent(agent.key, { argsText: event.currentTarget.value }) }}
+              />
+              <label className="znac-sublabel" htmlFor={`znac-agent-${agent.key}-cliargs`}>{t('field.agent.cliArgs')}</label>
+              <input
+                id={`znac-agent-${agent.key}-cliargs`}
+                type="text"
+                value={agent.cliArgsText}
+                disabled={!editable}
+                placeholder="--dangerously-skip-permissions"
+                onChange={(event) => { updateAgent(agent.key, { cliArgsText: event.currentTarget.value }) }}
               />
               <label className="znac-sublabel" htmlFor={`znac-agent-${agent.key}-env`}>{t('field.agent.env')}</label>
               <input

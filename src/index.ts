@@ -56,6 +56,7 @@ export const Config: Schema<any> = Schema.object({
       displayName: Schema.string().required(),
       command: Schema.string().required(),
       args: Schema.array(Schema.string()).default([]),
+      cliArgs: Schema.array(Schema.string()).default([]),
       // Schema.dict() 的推断类型引用 cosmokit 的 Dict，会让导出类型不可移植
       // （TS2883）；用 any + interface 约束代替。
       env: Schema.any(),
