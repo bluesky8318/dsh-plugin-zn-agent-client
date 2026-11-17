@@ -41,6 +41,69 @@ function probeSettingsPanel(ctx: Context): boolean {
 /** 触发浮层打开的 document 事件名。 */
 export const OPEN_LAUNCHER_EVENT = 'znac:open-launcher'
 
+/** DOM 兜底层：设置/插件入口按钮的可访问文本候选（精确匹配）。 */
+const SETTINGS_TRIGGER_LABELS = ['设置', '插件', 'settings', 'plugins', 'preferences'] as const
+
+/**
+ * DOM 兜底层：插件详情页打开按钮的 aria-label 标记。宿主插件管理页的
+ * 卡片标题按钮 aria-label = t('openDetail', { name })，包含包名/显示名，
+ * 与语言无关——靠子串定位。
+ */
+const DETAIL_NAME_MARKERS = ['dsh-plugin-zn-agent-client', 'ACP Agent Client', 'ACP 智能体客户端'] as const
+
+/** 按钮的可访问文本：优先 aria-label，退回 textContent。 */
+function accessibleText(node: Element): string {
+  const label = node.getAttribute('aria-label')
+  if (label !== null && label.trim() !== '') return label
+  return (node.textContent ?? '').trim()
+}
+
+/** 找设置/插件入口按钮（优先 nav 内的行，其次全文按钮，文本精确匹配）。 */
+function findSettingsTriggers(): readonly HTMLElement[] {
+  const nodes = Array.from(document.querySelectorAll<HTMLElement>('nav button, [role="navigation"] button, button'))
+  const hits: HTMLElement[] = []
+  for (const node of nodes) {
+    const text = accessibleText(node).toLowerCase()
+    if (SETTINGS_TRIGGER_LABELS.some((item) => item.toLowerCase() === text)) hits.push(node)
+  }
+  return hits
+}
+
+/** 找本插件详情页的打开按钮（aria-label 含包名/显示名子串）。 */
+function findBundleDetailButton(): HTMLElement | null {
+  for (const marker of DETAIL_NAME_MARKERS) {
+    const hit = document.querySelector<HTMLElement>(`button[aria-label*="${marker}"]`)
+    if (hit !== null) return hit
+  }
+  return null
+}
+
+/** DOM 兜底层的等待。 */
+function domDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => { window.setTimeout(resolve, ms) })
+}
+
+/**
+ * 分层打开本插件的设置页：① layout.selectPanel 探测（获得授权的路径，
+ * 候选 id 命中即用）；② DOM 兜底——如果详情按钮已在文档里（插件页开着）
+ * 直接点；③ 点设置/插件入口按钮，等页面挂载后点我们的详情按钮（重试轮询）。
+ * 全部失败返回 false（调用方显示提示行）。
+ */
+async function openSettingsDeep(): Promise<boolean> {
+  if (layoutProbe?.() === true) return true
+  const direct = findBundleDetailButton()
+  if (direct !== null) { direct.click(); return true }
+  for (const trigger of findSettingsTriggers().slice(0, 3)) {
+    trigger.click()
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      await domDelay(350)
+      const hit = findBundleDetailButton()
+      if (hit !== null) { hit.click(); return true }
+    }
+  }
+  return false
+}
+
 /** 从配置快照读出的 agent 条目。 */
 export interface AgentEntry {
   readonly id: string
@@ -115,13 +178,20 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
 
   const close = useCallback(() => { setOpen(false) }, [])
+  const openingRef = useRef(false)
   const openSettings = useCallback(() => {
-    if (layoutProbe?.() === true) {
-      setSettingsNote(false)
-      close()
-      return
-    }
-    setSettingsNote(true)
+    if (openingRef.current) return
+    openingRef.current = true
+    void openSettingsDeep()
+      .then((opened) => {
+        if (opened) {
+          setSettingsNote(false)
+          close()
+        } else {
+          setSettingsNote(true)
+        }
+      })
+      .finally(() => { openingRef.current = false })
   }, [close])
 
   useEffect(() => {
