@@ -148,6 +148,11 @@ function claudeSlug(cwd: string): string {
   return cwd.replaceAll('/', '-')
 }
 
+/** cwd 归一化（去掉末尾斜杠），用于工作区相等比较。 */
+function normalizeCwd(value: string): string {
+  return value.length > 1 && value.endsWith('/') ? value.slice(0, -1) : value
+}
+
 
 /** 会话 jsonl 首段的形状（只取摘要要用的字段）。 */
 interface SessionLine {
@@ -244,6 +249,8 @@ async function listQoderSessions(cwd: string): Promise<CliSessionEntry[]> {
         firstUserSummary(filePath, 'Qoder 会话'),
         firstWorkspaceDir(filePath),
       ])
+      // 只列当前工作区的会话：跨 worktree 的会话 CLI resume 不到，历史里直接不出现。
+      if (workdir !== null && normalizeCwd(workdir) !== normalizeCwd(cwd)) continue
       entries.push({
         id,
         summary,
@@ -277,6 +284,8 @@ async function listClaudeSessions(cwd: string): Promise<CliSessionEntry[]> {
         firstUserSummary(filePath, 'Claude 会话'),
         firstWorkspaceDir(filePath),
       ])
+      // 只列当前工作区的会话：跨 worktree 的会话 CLI resume 不到，历史里直接不出现。
+      if (workdir !== null && normalizeCwd(workdir) !== normalizeCwd(cwd)) continue
       entries.push({
         id,
         summary,
@@ -338,7 +347,15 @@ export async function listAgentSessions(agent: Pick<AgentConfig, 'command'>, cwd
       // 回落枚举是子进程拉起整个 CLI（实测秒级），限时 3s 兜住弹层延迟。
       const output = await runCommand(agent.command, ['--list-sessions'], cwd, 3_000)
       if (output === null) return []
-      const entries = parseQoderSessionList(output)
+      const parsed = parseQoderSessionList(output)
+      // CLI 兜底可能列出跨 worktree 的会话：逐条反查记录工作区，只留当前工作区的
+      //（反查不到的按用户预期直接丢弃——宁可少列，不可列出 resume 不到的）。
+      const entries: CliSessionEntry[] = []
+      for (const entry of parsed) {
+        const workdir = await resolveSessionWorktree(agent.command, entry.id)
+        if (workdir === null || normalizeCwd(workdir) !== normalizeCwd(cwd)) continue
+        entries.push(entry)
+      }
       return entries.slice(0, 20)
     }
     if (base === 'kimi') return await listKimiSessions(cwd)
