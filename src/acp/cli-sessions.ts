@@ -68,10 +68,10 @@ export function buildLaunchPlan(
   return { mode: 'resume', launchLine: `${command} ${flag} ${target}` }
 }
 
-/** execFile 的 Promise 化（10s 超时，失败返回 null）。 */
-async function runCommand(command: string, args: string[], cwd: string): Promise<string | null> {
+/** execFile 的 Promise 化（默认 10s 超时，失败返回 null）。 */
+async function runCommand(command: string, args: string[], cwd: string, timeoutMs = 10_000): Promise<string | null> {
   return await new Promise((resolve) => {
-    execFile(command, args, { cwd, timeout: 10_000, maxBuffer: 1024 * 1024, encoding: 'utf8' }, (error, stdout) => {
+    execFile(command, args, { cwd, timeout: timeoutMs, maxBuffer: 1024 * 1024, encoding: 'utf8' }, (error, stdout) => {
       resolve(error === null ? stdout : null)
     })
   })
@@ -214,7 +214,8 @@ export async function listAgentSessions(agent: Pick<AgentConfig, 'command'>, cwd
       // CLI 子进程枚举（--list-sessions 要拉起整个 CLI，秒级延迟）。
       const fileEntries = await listQoderSessions(cwd)
       if (fileEntries.length > 0) return fileEntries.slice(0, 20)
-      const output = await runCommand(agent.command, ['--list-sessions'], cwd)
+      // 回落枚举是子进程拉起整个 CLI（实测秒级），限时 3s 兜住弹层延迟。
+      const output = await runCommand(agent.command, ['--list-sessions'], cwd, 3_000)
       if (output === null) return []
       const entries = parseQoderSessionList(output)
       return entries.slice(0, 20)
