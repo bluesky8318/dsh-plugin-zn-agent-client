@@ -12,95 +12,42 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
 import { ACP_COMMAND_BASE } from './constants.ts'
 
-/** registerShellOverlay 捕获的布局探测函数（组件通过它请求打开设置页）。 */
-let layoutProbe: (() => boolean) | null = null
-
-/**
- * 运行时探测宿主的主面板：依次尝试 settings/plugins 候选 id。
- * DSH 客户端没有开放的"打开设置页"API（layout.selectPanel 需要已注册的
- * panel id，id 不可枚举）——未注册的 id 会抛出可捕获的错误，借此探测。
- * @param ctx - 客户端上下文。
- * @returns 是否成功打开。
- */
-function probeSettingsPanel(ctx: Context): boolean {
-  try {
-    const layout = (ctx as unknown as { get?(key: string): unknown }).get?.('layout') as
-      | { selectPanel?: (panelId: string) => void }
-      | undefined
-    if (layout === null || typeof layout?.selectPanel !== 'function') return false
-    for (const candidate of ['settings', 'plugins']) {
-      try {
-        layout.selectPanel(candidate)
-        return true
-      } catch { /* 未注册的面板 id，试下一个 */ }
-    }
-  } catch { /* layout 服务缺失（旧宿主） */ }
-  return false
-}
-
 /** 触发浮层打开的 document 事件名。 */
 export const OPEN_LAUNCHER_EVENT = 'znac:open-launcher'
 
-/** DOM 兜底层：设置/插件入口按钮的可访问文本候选（精确匹配）。 */
-const SETTINGS_TRIGGER_LABELS = ['设置', '插件', 'settings', 'plugins', 'preferences'] as const
+/** 宿主 pluginNavigation 服务面（dsh-client-ui-plugin-manager reflect.provide 提供）。 */
+interface PluginNavigation {
+  /** 打开插件管理页列表视图。 */
+  openList(): void
+  /** 打开指定 bundle 的详情页（selectPanel('plugins') + installed tab + package 视图）。 */
+  openBundle(packageName: string): void
+}
+
+/** registerShellOverlay 捕获的 pluginNavigation 服务（旧宿主缺失时为 null）。 */
+let pluginNavigation: PluginNavigation | null = null
+
+/** 本 bundle 的包名（openBundle 的目标页面）。 */
+const BUNDLE_PACKAGE_NAME = 'dsh-plugin-zn-agent-client'
 
 /**
- * DOM 兜底层：插件详情页打开按钮的 aria-label 标记。宿主插件管理页的
- * 卡片标题按钮 aria-label = t('openDetail', { name })，包含包名/显示名，
- * 与语言无关——靠子串定位。
+ * 打开本插件自己的详情页：宿主的 pluginNavigation.openBundle 就是为此而设的
+ * 授权 API（同款消费方式见 dsh-client-ui-entry-customization）。服务缺失时
+ * 退回 selectPanel('plugins')（至少到插件列表页），再不行返回 false。
  */
-const DETAIL_NAME_MARKERS = ['dsh-plugin-zn-agent-client', 'ACP Agent Client', 'ACP 智能体客户端'] as const
-
-/** 按钮的可访问文本：优先 aria-label，退回 textContent。 */
-function accessibleText(node: Element): string {
-  const label = node.getAttribute('aria-label')
-  if (label !== null && label.trim() !== '') return label
-  return (node.textContent ?? '').trim()
-}
-
-/** 找设置/插件入口按钮（优先 nav 内的行，其次全文按钮，文本精确匹配）。 */
-function findSettingsTriggers(): readonly HTMLElement[] {
-  const nodes = Array.from(document.querySelectorAll<HTMLElement>('nav button, [role="navigation"] button, button'))
-  const hits: HTMLElement[] = []
-  for (const node of nodes) {
-    const text = accessibleText(node).toLowerCase()
-    if (SETTINGS_TRIGGER_LABELS.some((item) => item.toLowerCase() === text)) hits.push(node)
-  }
-  return hits
-}
-
-/** 找本插件详情页的打开按钮（aria-label 含包名/显示名子串）。 */
-function findBundleDetailButton(): HTMLElement | null {
-  for (const marker of DETAIL_NAME_MARKERS) {
-    const hit = document.querySelector<HTMLElement>(`button[aria-label*="${marker}"]`)
-    if (hit !== null) return hit
-  }
-  return null
-}
-
-/** DOM 兜底层的等待。 */
-function domDelay(ms: number): Promise<void> {
-  return new Promise((resolve) => { window.setTimeout(resolve, ms) })
-}
-
-/**
- * 分层打开本插件的设置页：① layout.selectPanel 探测（获得授权的路径，
- * 候选 id 命中即用）；② DOM 兜底——如果详情按钮已在文档里（插件页开着）
- * 直接点；③ 点设置/插件入口按钮，等页面挂载后点我们的详情按钮（重试轮询）。
- * 全部失败返回 false（调用方显示提示行）。
- */
-async function openSettingsDeep(): Promise<boolean> {
-  if (layoutProbe?.() === true) return true
-  const direct = findBundleDetailButton()
-  if (direct !== null) { direct.click(); return true }
-  for (const trigger of findSettingsTriggers().slice(0, 3)) {
-    trigger.click()
-    for (let attempt = 0; attempt < 6; attempt += 1) {
-      await domDelay(350)
-      const hit = findBundleDetailButton()
-      if (hit !== null) { hit.click(); return true }
+function openOurBundlePage(ctx: Context): boolean {
+  try {
+    if (pluginNavigation !== null && typeof pluginNavigation.openBundle === 'function') {
+      pluginNavigation.openBundle(BUNDLE_PACKAGE_NAME)
+      return true
     }
-  }
+    const layout = (ctx as unknown as { get?(key: string): unknown }).get?.('layout') as
+      | { selectPanel?: (panelId: string) => void }
+      | undefined
+    if (layout !== null && typeof layout?.selectPanel === 'function') {
+      layout.selectPanel('plugins')
+      return true
+    }
+  } catch { /* 服务缺失（旧宿主） */ }
   return false
 }
 
@@ -147,7 +94,14 @@ type OverlayProps = PropsRuntime<'shell.overlay'> &
  * @param controller - 配置表单控制器（读 agent 列表）。
  */
 export function registerShellOverlay(ctx: Context, controller: ConfigFormController): void {
-  layoutProbe = () => probeSettingsPanel(ctx)
+  // 声明依赖宿主的 pluginNavigation 服务（设置按钮深链到本插件页的授权 API）；
+  // 服务由 dsh-client-ui-plugin-manager reflect.provide，缺失时 openOurBundlePage 走兜底。
+  ctx.inject(['pluginNavigation'], (scope: Context) => {
+    pluginNavigation = (scope as unknown as { get?(key: string): unknown }).get?.('pluginNavigation') as
+      | PluginNavigation
+      | null
+      ?? null
+  })
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
     id: 'znacp-agent-launcher',
@@ -178,21 +132,14 @@ export function AgentLauncherOverlay(props: OverlayProps): React.ReactElement | 
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
 
   const close = useCallback(() => { setOpen(false) }, [])
-  const openingRef = useRef(false)
   const openSettings = useCallback(() => {
-    if (openingRef.current) return
-    openingRef.current = true
-    void openSettingsDeep()
-      .then((opened) => {
-        if (opened) {
-          setSettingsNote(false)
-          close()
-        } else {
-          setSettingsNote(true)
-        }
-      })
-      .finally(() => { openingRef.current = false })
-  }, [close])
+    if (openOurBundlePage(props.pluginCtx)) {
+      setSettingsNote(false)
+      close()
+      return
+    }
+    setSettingsNote(true)
+  }, [close, props.pluginCtx])
 
   useEffect(() => {
     if (!open) return
