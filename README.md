@@ -5,7 +5,7 @@ English | [中文](README.zh.md) | [Changelog](CHANGELOG.md)
 DeepSeek Harness (`dsh`) plugin with two capabilities:
 
 1. **ACP client** — call local CLI agents (Claude Code, Qoder CLI, Kimi, Codex, Gemini CLI, …) over the [Agent Client Protocol](https://agentclientprotocol.com) from inside a DSH session: tools, a `/znacp` slash command, and a subagent provider.
-2. **CLI Agent views** — run the same agents' interactive TUIs inside DSH: an embedded terminal view in the conversation area with session management (new / history / resume), plus an external-terminal escape hatch.
+2. **CLI Agent views** — run the same agents' interactive TUIs inside DSH: an embedded terminal view in the conversation area with session management (new / history / resume), plus an external-terminal escape hatch. Every DSH session gets its own CLI instance, and a CLI session can be materialized as a real DSH session (a "seat") that shows up in the workspace sidebar with decorations and is findable via session search.
 
 The ACP connection layer is ported from [obsidian-agent-client](https://github.com/rait-09/obsidian-agent-client) and keeps its hard-won behaviours: detached process-group spawn, NDJSON transport, initialize handshake, silent-failure detection with a rolling stderr buffer, and a replacement-safe process exit guard.
 
@@ -85,6 +85,10 @@ Typical ACP entry points: `claude-agent-acp`, `codex-acp`, `gemini --experimenta
 ### CLI Agent view
 
 Open the view tab in the conversation area and pick an agent from the dropdown (live status dot: green = running). Sessions you started stay alive when you switch agents; `＋新会话` starts fresh; the history popover restores a past session in its own worktree. The terminal is a real PTY: full TUI interaction, resize-aware, WebGL-rendered. The external-terminal button opens the same agent in Terminal/iTerm2/Ghostty.
+
+**Per-session isolation.** Terminal instances are keyed `DSH session × agent`: session A and session B each drive their own CLI, and switching back to A restores A's live terminal (the PTY stays alive host-side).
+
+**Seats (`＋CLI 会话`).** The button creates a real DSH session for the CLI work: it appears in the workspace sidebar like a native session, opens directly on the CLI tab, and its title is pinned by the plugin (`CLI · <agent>`, later `CLI · <agent> · <first message>`) so DSH session search finds it. Idle seat rows show a leading agent chip; hovering reveals the CLI session id, workspace, and PTY state. Launching a CLI in any session registers it as a seat automatically. Seat mappings live in `~/.dsh/plugin-data/dsh-plugin-zn-agent-client/seats.json` and are safe to delete (display metadata only — the CLI's own session files stay untouched).
 
 ## Architecture
 

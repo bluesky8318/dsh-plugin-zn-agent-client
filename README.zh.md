@@ -5,7 +5,7 @@
 DeepSeek Harness（`dsh`）插件，提供两种能力：
 
 1. **ACP 客户端** —— 在 DSH 会话内通过 [Agent Client Protocol](https://agentclientprotocol.com) 调用本机 CLI Agent（Claude Code、Qoder CLI、Kimi、Codex、Gemini CLI 等）：提供工具、`/znacp` 斜杠命令和子代理提供方。
-2. **CLI Agent 视图** —— 在 DSH 里直接运行这些 agent 的交互式 TUI：会话区的内嵌终端视图，带会话管理（新建 / 历史 / 还原），并可随时转入外部终端。
+2. **CLI Agent 视图** —— 在 DSH 里直接运行这些 agent 的交互式 TUI：会话区的内嵌终端视图，带会话管理（新建 / 历史 / 还原），并可随时转入外部终端。每个 DSH 会话拥有独立的 CLI 实例；CLI 会话还可物化为真实 DSH 会话（「座位」），出现在工作区侧栏、带装饰、可被会话搜索找到。
 
 ACP 连接层移植自 [obsidian-agent-client](https://github.com/rait-09/obsidian-agent-client)，保留其关键行为：detached 进程组 spawn、NDJSON 传输、initialize 握手、带滚动 stderr 缓冲的静默失败检测、替换安全的进程退出守卫。
 
@@ -85,6 +85,10 @@ dsh plugin --profile desktop add https://github.com/bluesky8318/dsh-plugin-zn-ag
 ### CLI Agent 视图
 
 在会话区打开视图 tab，从下拉里选 agent（状态点实时：绿 = 运行中）。切换 agent 不会关掉已开的会话；`＋新会话` 开新的；历史弹层可以把过去的会话还原到它自己的工作区。终端是真 PTY：完整 TUI 交互、随尺寸自适应、WebGL 渲染。外部终端按钮可在 Terminal/iTerm2/Ghostty 里打开同一个 agent。
+
+**按会话隔离。** 终端实例按「DSH 会话 × agent」为键：会话 A 和会话 B 各自驱动独立 CLI，切回 A 即恢复 A 的活终端（PTY 在宿主侧保活）。
+
+**座位（`＋CLI 会话`）。** 该按钮为 CLI 工作创建一个真实 DSH 会话：像原生会话一样出现在工作区侧栏，打开即落在 CLI 标签页；标题由插件钉住（`CLI · <agent>`，随后 `CLI · <agent> · <首条消息>`），DSH 会话搜索可以找到。空闲座位行显示 leading agent 芯片，悬停可看 CLI 会话 id、工作区与 PTY 状态。在任何会话里启动 CLI 都会自动登记为座位。座位映射存于 `~/.dsh/plugin-data/dsh-plugin-zn-agent-client/seats.json`，可随时删除（仅展示元数据——CLI 自己的会话文件不受影响）。
 
 ## 架构
 

@@ -5,6 +5,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 English | [中文](CHANGELOG.zh.md)
 
+## [Unreleased]
+
+### Added
+
+- **Per-session CLI seats (Option A)** — every DSH session gets its own CLI agent instance (PTY key `DSH-session:agent`); switching sessions restores that session's live terminal. The `＋CLI 会话` button in the view creates a real DSH session as a seat: it appears in the workspace sidebar like any native session, opens directly on the CLI tab (view preference pre-write), and the seat session title is pinned via the host `sessionTitle` API (`CLI · <agent>` then `CLI · <agent> · <first message>`) so DSH session search finds CLI work. Sidebar decorations: a leading agent chip on idle seat rows and a hover card (agent, CLI session id, workspace, PTY state). Launching a CLI in any session lazily registers it as a seat; resuming from history attaches the CLI identity for the title. Seat mappings persist in `~/.dsh/plugin-data/dsh-plugin-zn-agent-client/seats.json`.
+
 ## [0.2.0] - 2026-11-17
 
 ### Added
