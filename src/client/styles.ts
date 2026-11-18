@@ -769,7 +769,48 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znac-view-agentitem[data-active='true'] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary); }
 .znac-view-agentname { flex: 1; }
 
-
+/* ---- 工作区看板（main 面板） ---- */
+.znb-root { display: flex; flex-direction: column; height: 100%; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); }
+.znb-head { display: flex; align-items: center; gap: 12px; padding: 14px 18px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.znb-head-text { min-width: 0; }
+.znb-title { margin: 0; font-size: 16px; font-weight: 500; line-height: 22px; }
+.znb-sub { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.znb-search { width: 220px; padding: 5px 10px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
+.znb-search:focus { border-color: var(--dsw-alias-state-business-primary); }
+.znb-new { padding: 5px 12px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; cursor: pointer; }
+.znb-new:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znb-body { display: flex; flex: 1; min-height: 0; }
+.znb-rail { display: flex; flex-direction: column; gap: 2px; width: 240px; flex: none; padding: 8px; overflow-y: auto; border-right: 0.5px solid var(--dsw-alias-border-l1); }
+.znb-ws { display: flex; flex-direction: column; gap: 1px; padding: 7px 10px; text-align: left; background: transparent; border: none; border-radius: 6px; cursor: pointer; }
+.znb-ws:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znb-ws-on { background: var(--dsw-alias-bg-layer-2); }
+.znb-ws-name { font-size: 13px; font-weight: 500; line-height: 20px; color: var(--dsw-alias-label-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.znb-ws-path { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.znb-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.znb-tabs { display: flex; align-items: center; gap: 4px; padding: 8px 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
+.znb-tab { padding: 6px 12px; font-size: 13px; line-height: 20px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.znb-tab-on { font-weight: 500; color: var(--dsw-alias-label-primary); border-bottom-color: var(--dsw-alias-state-business-primary); }
+.znb-tab-off { color: var(--dsw-alias-label-tertiary); cursor: default; }
+.znb-list { flex: 1; overflow-y: auto; padding: 8px 14px; }
+.znb-empty { margin: 24px 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); text-align: center; }
+.znb-empty-sub { margin: 4px 0 10px; text-align: left; }
+.znb-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+.znb-row:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znb-row-cli { cursor: default; }
+.znb-dot { width: 8px; height: 8px; flex: none; border-radius: 50%; corner-shape: round; background: var(--dsw-alias-border-l4); }
+.znb-dot-running { background: var(--dsw-alias-state-business-primary); }
+.znb-dot-confirm { background: var(--dsw-alias-state-error-primary); }
+.znb-dot-done { background: var(--dsw-alias-state-success-primary); }
+.znb-row-title { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.znb-badge { flex: none; padding: 1px 8px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 4px; }
+.znb-row-time { flex: none; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.znb-row-act { flex: none; padding: 3px 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); background: transparent; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 5px; cursor: pointer; opacity: 0; }
+.znb-row:hover .znb-row-act { opacity: 1; }
+.znb-row-act:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); }
+.znb-agent { padding: 6px 0 2px; }
+.znb-agent-name { display: flex; align-items: center; gap: 8px; margin: 6px 0; font-size: 13px; font-weight: 500; line-height: 20px; color: var(--dsw-alias-label-primary); }
+.znb-chip { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: none; font-size: 12px; line-height: 16px; font-weight: 500; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-state-business-primary); border-radius: 4px; }
+.znb-toast { position: fixed; right: 18px; bottom: 18px; padding: 8px 14px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; }
 `
 
 /** 注入本插件的样式节点；返回清理函数，插件停用时移除样式。 */

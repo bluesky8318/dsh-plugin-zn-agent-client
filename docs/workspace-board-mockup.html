@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>工作区看板 · 交互示意图（v1）</title>
+<style>
+  :root {
+    --bg: #0c0c0d; --panel: #161617; --panel2: #1d1d1f; --panel3: #242427;
+    --line: #2e2e32; --txt: #e8e8ea; --txt2: #a8a8ad; --txt3: #6e6e74;
+    --accent: #4c8bf5; --accent-soft: rgba(76,139,245,.14);
+    --run: #34c77b; --wait: #e5a23c; --done: #8a8a90; --arch: #55555b;
+    --q: #8b6cf0; --k: #4c8bf5; --c: #e58c3c;
+    --danger: #e5635c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--txt); font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 14px; line-height: 1.5; padding: 28px 32px 80px; }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { color: var(--txt2); margin-bottom: 26px; font-size: 13px; }
+  .sub b { color: var(--txt); }
+  .note-num { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; align-items: center; justify-content: center; margin-right: 6px; flex: none; }
+  .section { margin-bottom: 34px; }
+  .section > h2 { font-size: 15px; margin-bottom: 12px; color: var(--txt); display: flex; align-items: center; }
+  .frame { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); display: flex; height: 640px; }
+
+  /* ── mini DSH frame ─────────────────────────── */
+  .app-rail { width: 64px; background: #101011; border-right: 1px solid var(--line); display: flex; flex-direction: column; align-items: center; padding: 14px 0; gap: 6px; flex: none; }
+  .rail-btn { width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center; color: var(--txt3); font-size: 18px; position: relative; }
+  .rail-btn.active { background: var(--accent-soft); color: var(--accent); }
+  .rail-btn .tag-new { position: absolute; right: -2px; top: -2px; background: var(--accent); color: #fff; font-size: 9px; padding: 1px 4px; border-radius: 6px; }
+  .rail-label { font-size: 9px; color: var(--txt3); text-align: center; margin-top: -3px; }
+  .board-main { flex: 1; display: flex; min-width: 0; }
+
+  /* ── board page ─────────────────────────────── */
+  .ws-rail { width: 252px; border-right: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; flex: none; }
+  .ws-head { padding: 16px 16px 10px; }
+  .ws-head .title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .ws-search { margin-top: 12px; display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--txt3); }
+  .ws-search input { background: transparent; border: none; outline: none; color: var(--txt); font-size: 13px; width: 100%; }
+  .ws-list { flex: 1; overflow-y: auto; padding: 6px 8px 12px; }
+  .ws-row { border-radius: 9px; padding: 9px 10px; cursor: pointer; display: flex; gap: 9px; align-items: center; }
+  .ws-row:hover { background: var(--panel2); }
+  .ws-row.sel { background: var(--panel3); }
+  .ws-ic { width: 30px; height: 30px; border-radius: 8px; background: var(--panel3); display: flex; align-items: center; justify-content: center; font-size: 15px; flex: none; }
+  .ws-meta { min-width: 0; flex: 1; }
+  .ws-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws-path { font-size: 11px; color: var(--txt3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ws-badge { font-size: 11px; color: var(--txt2); background: var(--panel2); border-radius: 8px; padding: 2px 7px; flex: none; }
+  .ws-badge.today { color: var(--accent); background: var(--accent-soft); }
+
+  .ws-body { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--bg); }
+  .ws-summary { padding: 18px 22px 0; }
+  .ws-title-row { display: flex; align-items: center; gap: 10px; }
+  .ws-title-row .nm { font-size: 18px; font-weight: 700; }
+  .ws-title-row .open { font-size: 12px; color: var(--accent); cursor: pointer; }
+  .ws-stats { margin-top: 6px; font-size: 12px; color: var(--txt2); display: flex; gap: 14px; }
+  .ws-stats b { color: var(--txt); font-weight: 600; }
+  .tabs { display: flex; gap: 22px; margin-top: 14px; border-bottom: 1px solid var(--line); padding: 0 22px; }
+  .tab { padding: 8px 2px 10px; font-size: 13px; color: var(--txt2); cursor: pointer; border-bottom: 2px solid transparent; display: flex; align-items: center; gap: 6px; }
+  .tab.on { color: var(--txt); border-bottom-color: var(--accent); font-weight: 600; }
+  .tab.off { opacity: .42; cursor: default; }
+  .tab .cnt { font-size: 11px; background: var(--panel2); border-radius: 7px; padding: 1px 6px; color: var(--txt2); }
+
+  .list-tools { display: flex; align-items: center; gap: 10px; padding: 12px 22px 0; }
+  .list-tools .search { flex: 1; max-width: 320px; display: flex; align-items: center; gap: 6px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; color: var(--txt3); }
+  .list-tools .search input { background: transparent; border: none; outline: none; color: var(--txt); font-size: 12.5px; width: 100%; }
+  .btn { font-size: 12.5px; border-radius: 8px; padding: 6px 13px; cursor: pointer; border: 1px solid var(--line); background: var(--panel2); color: var(--txt); white-space: nowrap; }
+  .btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  .legend { margin-left: auto; font-size: 11px; color: var(--txt3); display: flex; gap: 12px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 4px; vertical-align: 1px; }
+  .dot.run { background: var(--run); } .dot.wait { background: var(--wait); } .dot.done { background: none; border: 1.5px solid var(--done); width: 7px; height: 7px; } .dot.arch { background: none; border: 1.5px dashed var(--arch); width: 7px; height: 7px; }
+
+  .sess-list { flex: 1; overflow-y: auto; padding: 10px 22px 18px; }
+  .sess-row { display: flex; align-items: center; gap: 11px; padding: 11px 12px; border-radius: 10px; cursor: pointer; border-bottom: 1px solid rgba(46,46,50,.5); }
+  .sess-row:hover { background: var(--panel2); }
+  .sess-row .t { flex: 1; min-width: 0; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .sess-row .tm { font-size: 11.5px; color: var(--txt3); flex: none; }
+  .row-acts { display: none; gap: 6px; flex: none; }
+  .sess-row:hover .row-acts { display: flex; }
+  .row-acts .btn { padding: 3px 9px; font-size: 11.5px; }
+  .empty { color: var(--txt3); font-size: 13px; text-align: center; padding: 44px 0; }
+
+  .chip { width: 22px; height: 22px; border-radius: 7px; font-size: 11px; font-weight: 700; color: #fff; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+  .chip.q { background: var(--q); } .chip.k { background: var(--k); } .chip.c { background: var(--c); }
+  .cli-tag { font-size: 10.5px; color: var(--txt2); border: 1px solid var(--line); padding: 1px 6px; border-radius: 6px; flex: none; }
+  .sess-row .sub2 { font-size: 11px; color: var(--txt3); }
+
+  /* ── annotations ────────────────────────────── */
+  .anno { margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 18px; font-size: 12.5px; color: var(--txt2); }
+  .anno li { list-style: none; margin: 7px 0; display: flex; }
+  .anno b { color: var(--txt); }
+  .safe { border-left: 3px solid var(--run); }
+</style>
+</head>
+<body>
+  <h1>工作区看板 · 交互示意图（v1）</h1>
+  <div class="sub">入口：<b>侧栏图标 → 主区域整页面板</b>（dsh-context / workspace-insight 同款原生挂载）。交互参照「豆包工作」。数据<b>只读</b> + 官方 open/archive API，<b>不写会话日志、不改会话区</b>。</div>
+
+  <div class="section">
+    <h2>① 整体布局：侧栏新增看板图标，点击切到主区域看板页</h2>
+    <div class="frame">
+      <div class="app-rail">
+        <div><div class="rail-btn">💬</div><div class="rail-label">会话</div></div>
+        <div><div class="rail-btn">📁</div><div class="rail-label">文件</div></div>
+        <div><div class="rail-btn active">🗂️<span class="tag-new">新</span></div><div class="rail-label">看板</div></div>
+        <div><div class="rail-btn">🧩</div><div class="rail-label">插件</div></div>
+        <div><div class="rail-btn">⚙️</div><div class="rail-label">设置</div></div>
+      </div>
+      <div class="board-main">
+        <div class="ws-rail">
+          <div class="ws-head">
+            <div class="title">🗂️ 工作区看板</div>
+            <div class="ws-search">🔍 <input placeholder="搜索工作区…"></div>
+          </div>
+          <div class="ws-list" id="wsList"></div>
+        </div>
+        <div class="ws-body">
+          <div class="ws-summary">
+            <div class="ws-title-row"><span class="nm" id="wsName"></span><span class="open" id="wsOpen">打开工作区 ↗</span></div>
+            <div class="ws-stats" id="wsStats"></div>
+          </div>
+          <div class="tabs">
+            <div class="tab on" data-tab="dsh">对话 <span class="cnt" id="cntDsh"></span></div>
+            <div class="tab" data-tab="cli">CLI 会话 <span class="cnt" id="cntCli"></span></div>
+            <div class="tab off">对话产物 <span style="font-size:10px;">后续版本</span></div>
+            <div class="tab off">项目配置 <span style="font-size:10px;">后续版本</span></div>
+          </div>
+          <div class="list-tools">
+            <div class="search">🔍 <input id="q" placeholder="搜索会话标题…"></div>
+            <button class="btn pri" id="btnNew">＋ 新会话</button>
+            <div class="legend"><span><span class="dot run"></span>运行中</span><span><span class="dot wait"></span>等待你</span><span><span class="dot done"></span>空闲</span><span><span class="dot arch"></span>已归档</span></div>
+          </div>
+          <div class="sess-list" id="list"></div>
+        </div>
+      </div>
+    </div>
+    <ul class="anno">
+      <li><span class="note-num">1</span><span><b>侧栏图标</b>：sidebar.panellist 插槽注册（和 dsh-context 的图表图标同级），侧栏自己负责选中态；点击把主区域切到看板页 —— 不触碰会话列表。</span></li>
+      <li><span class="note-num">2</span><span><b>左列工作区列表</b>：名称 / 路径 / 会话数徽标 / 今日活跃高亮；顶部搜索框按名称、路径过滤。</span></li>
+      <li><span class="note-num">3</span><span><b>摘要头</b>：选中工作区的会话总数、今日活跃、CLI 会话数；「打开工作区」= 切到该工作区（uiWorkspace.openWorkspace）。</span></li>
+      <li><span class="note-num">4</span><span><b>标签页</b>：v1 只做「对话」+「CLI 会话」；产物 / 配置灰置，留到 v2。</span></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>② 「对话」标签：该工作区的 DSH 会话列表（豆包工作式）</h2>
+    <ul class="anno">
+      <li><span class="note-num">5</span><span><b>状态点</b>：运行中（agent 正在跑）/ 等待你（需要确认或提问）/ 空闲 / 已归档。数据来自会话列表元数据（只读 projcache + 客户端会话状态）。</span></li>
+      <li><span class="note-num">6</span><span><b>点击行 = 打开会话</b>（官方 openSession API，跳回正常会话界面）；悬停出现「归档」；「＋ 新会话」在该工作区下新建。全部走官方 API。</span></li>
+      <li><span class="note-num">7</span><span><b>搜索</b>：按会话标题实时过滤（输入试试）。</span></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>③ 「CLI 会话」标签：需求 3 的曲线救国 —— CLI agent 会话在看板里可见、可搜索</h2>
+    <ul class="anno">
+      <li><span class="note-num">8</span><span><b>行内容</b>：agent 徽标（Q=qoder / K=kimi / C=claude）+ CLI 会话首条消息标题 + agent 名 + 更新时间 + PTY 状态。</span></li>
+      <li><span class="note-num">9</span><span><b>恢复</b>：复用现有 CLI Agent 视图的 resume 流程（打开一个新 DSH 会话并恢复该 CLI 会话，PTY 续接）；数据来自插件现有的按工作区历史读取，<b>不读不改任何 DSH 会话日志</b>。</span></li>
+    </ul>
+  </div>
+
+  <div class="section">
+    <h2>④ 数据与安全边界</h2>
+    <ul class="anno safe">
+      <li><span class="note-num">✓</span><span><b>只读数据源</b>：~/.dsh/storages/workspace.json（工作区↔会话归属）+ session_projcache/*.json（标题/时间）——workspace-insight 已验证的只读配方。</span></li>
+      <li><span class="note-num">✓</span><span><b>零写入</b>：不写会话日志、不写 turn 事件、不改会话标题、不改侧栏会话区。所有写操作（归档/新建/打开）都走 DSH 官方 client API。</span></li>
+      <li><span class="note-num">✓</span><span><b>CLI 会话</b>：沿用插件现有历史读取（首次 64KB 扫描 + 按工作区过滤），只增显示，不动数据。</span></li>
+    </ul>
+  </div>
+
+<script>
+const DATA = {
+  "scm/github": {
+    name: "scm/github", path: "~/work/zeronote/scm/github", today: 3,
+    dsh: [
+      { st: "run",  t: "dsh 插件调研：工作区看板方案", tm: "运行中 · 21:32" },
+      { st: "done", t: "zn-agent-client 会话隔离重构", tm: "今日 19:58" },
+      { st: "done", t: "qoder 会话历史按工作区过滤", tm: "今日 18:20" },
+      { st: "wait", t: "release v0.2.0 待你确认 changelog", tm: "今日 16:40" },
+      { st: "done", t: "settings 深链 API 调研", tm: "昨天" },
+      { st: "done", t: "README 双语化", tm: "3 天前" },
+      { st: "arch", t: "mvp 脚手架搭建（已归档）", tm: "11-10" }
+    ],
+    cli: [
+      { ag: "q", name: "CLI·Qoder · 暗号查询演示", agent: "qoder", tm: "运行中 · 今日 20:05", st: "run" },
+      { ag: "k", name: "CLI·Kimi · README 翻译校对", agent: "kimi", tm: "今日 15:12", st: "done" },
+      { ag: "c", name: "CLI·Claude · 移除座位机制", agent: "claude-code", tm: "昨天", st: "done" }
+    ]
+  },
+  "zeronote/app": {
+    name: "zeronote/app", path: "~/work/zeronote/app", today: 1,
+    dsh: [
+      { st: "wait", t: "启动页性能优化（等你确认方案）", tm: "今日 11:05" },
+      { st: "done", t: "崩溃日志收集脚本", tm: "昨天" }
+    ],
+    cli: [
+      { ag: "q", name: "CLI·Qoder · 启动耗时分析", agent: "qoder", tm: "今日 11:40", st: "done" }
+    ]
+  },
+  "blog": {
+    name: "blog", path: "~/work/blog", today: 0,
+    dsh: [
+      { st: "done", t: "10 月文章归档", tm: "11-02" }
+    ],
+    cli: []
+  }
+};
+let cur = "scm/github", tab = "dsh";
+const $ = s => document.querySelector(s);
+function dot(st) { return `<span class="dot ${st}"></span>`; }
+function renderWs() {
+  $("#wsList").innerHTML = Object.entries(DATA).map(([k, w]) => `
+    <div class="ws-row ${k === cur ? "sel" : ""}" data-k="${k}">
+      <div class="ws-ic">📁</div>
+      <div class="ws-meta"><div class="ws-name">${w.name}</div><div class="ws-path">${w.path}</div></div>
+      <div class="ws-badge ${w.today ? "today" : ""}">${w.dsh.length + w.cli.length}</div>
+    </div>`).join("");
+  document.querySelectorAll(".ws-row").forEach(r => r.onclick = () => { cur = r.dataset.k; renderWs(); renderBody(); });
+}
+function renderBody() {
+  const w = DATA[cur];
+  $("#wsName").textContent = w.name;
+  $("#wsStats").innerHTML = `<span>会话 <b>${w.dsh.length}</b></span><span>今日活跃 <b>${w.today}</b></span><span>CLI 会话 <b>${w.cli.length}</b></span><span style="color:var(--txt3)">${w.path}</span>`;
+  $("#cntDsh").textContent = w.dsh.length;
+  $("#cntCli").textContent = w.cli.length;
+  const q = $("#q").value.trim().toLowerCase();
+  let html = "";
+  if (tab === "dsh") {
+    const rows = w.dsh.filter(r => !q || r.t.toLowerCase().includes(q));
+    html = rows.length ? rows.map(r => `
+      <div class="sess-row">${dot(r.st)}<div class="t">${r.t}</div>
+      <div class="tm">${r.tm}</div>
+      <div class="row-acts">${r.st !== "arch" ? '<button class="btn">归档</button>' : '<button class="btn">恢复</button>'}</div>
+      </div>`).join("") : `<div class="empty">没有匹配的会话</div>`;
+  } else {
+    const rows = w.cli.filter(r => !q || r.name.toLowerCase().includes(q) || r.agent.toLowerCase().includes(q));
+    html = rows.length ? rows.map(r => `
+      <div class="sess-row"><span class="chip ${r.ag}">${r.ag.toUpperCase()}</span>
+      <div style="flex:1;min-width:0"><div class="t">${r.name}</div><div class="sub2">${r.agent} · CLI 会话文件保留在 CLI 自己的目录</div></div>
+      <span class="cli-tag">${r.st === "run" ? "● 运行中" : "○ 已结束"}</span>
+      <div class="tm">${r.tm}</div>
+      <div class="row-acts"><button class="btn">恢复</button></div>
+      </div>`).join("") : `<div class="empty">该工作区还没有 CLI agent 会话<br><span style="font-size:11.5px">在 CLI Agent 视图里启动过的会话会出现在这里</span></div>`;
+  }
+  $("#list").innerHTML = html;
+}
+document.querySelectorAll(".tab[data-tab]").forEach(t => t.onclick = () => {
+  if (t.classList.contains("off")) return;
+  tab = t.dataset.tab;
+  document.querySelectorAll(".tab[data-tab]").forEach(x => x.classList.toggle("on", x === t));
+  renderBody();
+});
+$("#q").oninput = renderBody;
+$("#btnNew").onclick = () => alert("在该工作区新建 DSH 会话（uiWorkspace.connectWorkspace）\n—— mockup 演示");
+renderWs(); renderBody();
+</script>
+</body>
+</html>

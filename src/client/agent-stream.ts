@@ -535,12 +535,12 @@ export function disposeAllSessions(): void {
   sessions.clear()
 }
 
-/** 拉取某 agent 在当前工作区下的历史会话（历史▾ 菜单数据源）。 */
-export async function listSessions(agentId: string, sessionKey: string): Promise<CliSessionEntry[]> {
+/** 拉取某 agent 在当前工作区下的历史会话（历史▾ 菜单数据源；cwd 直传供工作区看板用）。 */
+export async function listSessions(agentId: string, sessionKey: string, cwd?: string): Promise<CliSessionEntry[]> {
   const response = await fetch(SESSIONS_URL, {
     method: 'POST',
     headers: { ...GUARD },
-    body: JSON.stringify({ id: agentId, session: sessionKey }),
+    body: JSON.stringify({ id: agentId, session: sessionKey, ...(cwd !== undefined && cwd !== '' ? { cwd } : {}) }),
   })
   if (!response.ok) throw new Error(`sessions ${response.status}`)
   const payload = (await response.json()) as { ok?: boolean; sessions?: CliSessionEntry[] }

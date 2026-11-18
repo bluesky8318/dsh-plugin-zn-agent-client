@@ -19,6 +19,7 @@ import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
 import { getExternalOpener } from './remote-external.ts'
 import { compositeTerminalId } from './agent-stream.ts'
+import type { PendingCliHandoff } from './workspace-board.tsx'
 
 /** 读页面明暗方案（只用于在切换时触发主题重读）。 */
 function useColorScheme(): 'dark' | 'light' {
@@ -77,6 +78,30 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
     displayName: agent.displayName,
   })), [agents])
 
+  // 工作区看板「恢复」的一次性交接：挂载时读 sessionStorage（读取即删），
+  // 选中目标 agent，并把这个 resume 动作传给 SessionArea（等会话就绪后执行）。
+  const [pending, setPending] = useState<PendingCliHandoff | null>(null)
+  useEffect(() => {
+    let handoff: PendingCliHandoff | null = null
+    try {
+      const raw = sessionStorage.getItem(`znacp.pendingCli.${sessionId}`)
+      if (raw !== null) {
+        sessionStorage.removeItem(`znacp.pendingCli.${sessionId}`)
+        const parsed = JSON.parse(raw) as Partial<PendingCliHandoff> | null
+        if (parsed !== null && typeof parsed.agentId === 'string'
+          && parsed.mode === 'resume' && typeof parsed.resumeTarget === 'string') {
+          handoff = { agentId: parsed.agentId, mode: 'resume', resumeTarget: parsed.resumeTarget }
+        }
+      }
+    } catch { /* 解析失败当作无交接 */ }
+    setPending(handoff)
+  }, [sessionId])
+  useEffect(() => {
+    if (pending !== null && targets.some((target: TermTarget) => target.id === pending.agentId)) {
+      setSelectedId(pending.agentId)
+    }
+  }, [pending, targets])
+
   const active = targets.find((target: TermTarget) => target.id === selectedId) ?? targets[0]
 
   if (targets.length === 0) return <div className="znac-view" data-znacp-cli-view="true"><p className="znac-view-empty">{t('view.empty')}</p></div>
@@ -93,6 +118,10 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
           targets={targets}
           selectedId={active.id}
           onSelect={(id) => { setSelectedId(id) }}
+          pendingAction={pending !== null && active.id === pending.agentId
+            ? { mode: 'resume', resumeTarget: pending.resumeTarget }
+            : undefined}
+          onConsumePending={() => { setPending(null) }}
         />
       )}
     </div>
@@ -108,6 +137,9 @@ function SessionArea(props: {
   targets: readonly TermTarget[]
   selectedId: string
   onSelect: (agentId: string) => void
+  /** 看板交接的一次性 resume 动作（会话就绪后由 onConsumePending 清掉）。 */
+  pendingAction?: { mode: 'resume'; resumeTarget: string } | undefined
+  onConsumePending: () => void
 }): React.ReactElement {
   const { agentId, sessionId, displayName, targets, selectedId, onSelect } = props
   // t 的键类型由 LocaleNamespaceMap 推导，运行时只是查表函数。
@@ -230,6 +262,17 @@ function formatTime(value: string): string {
     showToast(action.mode === 'new' ? t('view.newCreated') : label)
     void session?.openSession(action, label)
   }
+
+  // 看板「恢复」交接：会话对象就绪后执行一次 resume，然后清掉交接状态。
+  const { pendingAction, onConsumePending } = props
+  useEffect(() => {
+    if (session === null || pendingAction === undefined) return
+    onConsumePending()
+    runAction(
+      { mode: 'resume', resumeTarget: pendingAction.resumeTarget },
+      `${t('view.labelResume')} ${shortId(pendingAction.resumeTarget)}`,
+    )
+  }, [session, pendingAction])
 
   const shortId = (id: string): string => id.length > 8 ? id.slice(0, 8) : id
   const last = session?.lastAction

@@ -40,6 +40,14 @@ export type ZnAgentClientLocaleKey =
   | 'view.idleHint' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
+  // 工作区看板
+  | 'board.label' | 'board.title' | 'board.newChat' | 'board.searchHint'
+  | 'board.tabChat' | 'board.tabCli' | 'board.tabArtifacts' | 'board.tabConfig'
+  | 'board.sessionUnit' | 'board.runningUnit'
+  | 'board.noWorkspaces' | 'board.noSessions' | 'board.cliLoading' | 'board.noCliSessions'
+  | 'board.resume' | 'board.archive' | 'board.archived'
+  | 'board.stRunning' | 'board.stWaiting' | 'board.stDone' | 'board.stIdle'
+  | 'board.openFailed' | 'board.createFailed' | 'board.cliOpened'
 
 /** 英文文案。 */
 export const en: Record<ZnAgentClientLocaleKey, string> = {
@@ -116,6 +124,30 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalOpening': 'Opening…',
   'view.externalOpened': 'Opened',
   'view.externalFailed': 'Open failed',
+  'board.label': 'Workspace board',
+  'board.title': 'Workspace board',
+  'board.newChat': 'New session',
+  'board.searchHint': 'Search sessions',
+  'board.tabChat': 'Sessions',
+  'board.tabCli': 'CLI sessions',
+  'board.tabArtifacts': 'Artifacts',
+  'board.tabConfig': 'Setup',
+  'board.sessionUnit': 'sessions',
+  'board.runningUnit': 'running',
+  'board.noWorkspaces': 'No workspaces yet',
+  'board.noSessions': 'No sessions in this workspace',
+  'board.cliLoading': 'Loading…',
+  'board.noCliSessions': 'No CLI sessions in this workspace',
+  'board.resume': 'Resume',
+  'board.archive': 'Archive',
+  'board.archived': 'Archived',
+  'board.stRunning': 'Running',
+  'board.stWaiting': 'Waiting for you',
+  'board.stDone': 'Completed',
+  'board.stIdle': 'Idle',
+  'board.openFailed': 'Failed to open the session',
+  'board.createFailed': 'Failed to create the session',
+  'board.cliOpened': 'CLI resumed in a new session',
 }
 
 /** 中文文案。 */
@@ -193,4 +225,28 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalOpening': '正在打开…',
   'view.externalOpened': '已打开',
   'view.externalFailed': '打开失败',
+  'board.label': '工作区看板',
+  'board.title': '工作区看板',
+  'board.newChat': '新会话',
+  'board.searchHint': '搜索会话',
+  'board.tabChat': '对话',
+  'board.tabCli': 'CLI 会话',
+  'board.tabArtifacts': '产物',
+  'board.tabConfig': '配置',
+  'board.sessionUnit': '个会话',
+  'board.runningUnit': '运行中',
+  'board.noWorkspaces': '暂无工作区',
+  'board.noSessions': '该工作区还没有会话',
+  'board.cliLoading': '加载中…',
+  'board.noCliSessions': '该工作区还没有 CLI 会话',
+  'board.resume': '恢复',
+  'board.archive': '归档',
+  'board.archived': '已归档',
+  'board.stRunning': '运行中',
+  'board.stWaiting': '等待你',
+  'board.stDone': '已完成',
+  'board.stIdle': '空闲',
+  'board.openFailed': '打开会话失败',
+  'board.createFailed': '创建会话失败',
+  'board.cliOpened': '已在新会话中恢复 CLI',
 }

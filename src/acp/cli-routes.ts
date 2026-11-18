@@ -263,9 +263,14 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     if (agentId === '') return void fail(res, 400, 'missing agent id')
     const agent = resolveAgent(agentId)
     if (agent === null) return void fail(res, 404, `未找到入口：${agentId}`)
-    const cwd = typeof body.session === 'string' && body.session !== ''
-      ? options.resolveSessionCwd?.(body.session) ?? options.defaultCwd()
-      : options.defaultCwd()
+    // cwd 解析顺序：body.cwd（工作区看板直接带工作区路径）> body.session
+    //（会话视图带 DSH 会话 id）> 默认工作目录。cwd 只是只读的枚举范围参数。
+    const explicitCwd = typeof body.cwd === 'string' && body.cwd.trim() !== '' ? body.cwd.trim() : ''
+    const cwd = explicitCwd !== ''
+      ? explicitCwd
+      : typeof body.session === 'string' && body.session !== ''
+        ? options.resolveSessionCwd?.(body.session) ?? options.defaultCwd()
+        : options.defaultCwd()
     // 会话列表缓存（10s 内直接回缓存；过期先回旧值再后台刷新——
     // 枚举要 stat/读会话文件，历史弹层必须秒开）。
     const cacheKey = `${agentId}\n${cwd}`
