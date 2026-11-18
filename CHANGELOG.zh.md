@@ -9,7 +9,11 @@
 
 ### 新增
 
-- **按会话隔离的 CLI 座位（方案A）** —— 每个 DSH 会话拥有独立的 CLI agent 实例（PTY 键 `DSH会话:agent`）；切回会话即恢复它的活终端。视图中的 `＋CLI 会话` 按钮以一个真实 DSH 会话作为座位：像原生会话一样出现在工作区侧栏，打开即落在 CLI 标签页（预写视图偏好），座位标题通过宿主 `sessionTitle` API 钉住（`CLI · <agent>`，随后 `CLI · <agent> · <首条消息>`），DSH 会话搜索可命中 CLI 工作。侧栏装饰：空闲座位行的 leading agent 芯片 + 悬停详情卡（agent、CLI 会话 id、工作区、PTY 状态）。任何会话里启动 CLI 都会懒注册为座位；从历史恢复会携带 CLI 身份供标题使用。座位映射持久化在 `~/.dsh/plugin-data/dsh-plugin-zn-agent-client/seats.json`。
+- **按会话隔离的 CLI 实例** —— 每个 DSH 会话拥有独立的 CLI agent 实例（PTY 键 `DSH会话:agent`）；切回会话即恢复它的活终端（PTY 在宿主侧保活）。
+
+### 移除
+
+- 实验性的工作区侧栏集成（真实 DSH 会话座位、`＋CLI 会话` 按钮、侧栏装饰、会话标题钉住）。向活会话日志追加 turn 结构事件违反会话格式不变量，会导致会话加载损坏；插件不再触碰 DSH 会话日志与标题。
 
 ## [0.2.0] - 2026-11-17
 

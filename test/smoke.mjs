@@ -85,7 +85,7 @@ const config = {
 apply(ctx, config)
 
 assert.equal(name, 'dsh-plugin-zn-agent-client')
-assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions', 'sessionTitle', 'workspaceRegistry'])
+assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions'])
 
 assert.ok(registeredTools.some(t => t.name === 'list_acp_agents'), 'list_acp_agents should be registered')
 assert.ok(registeredTools.some(t => t.name === 'call_acp_agent'), 'call_acp_agent should be registered')
@@ -95,9 +95,7 @@ assert.equal(registeredProviders[0].name, 'acp')
 assert.equal(typeof registeredProviders[0].start, 'function')
 assert.ok(registeredCommands.some(c => c.name === 'znacp'), '/znacp command should be registered')
 assert.ok(registeredRoutes.includes('/api/zn-agent-client/sessions'), '/sessions route should be registered')
-assert.ok(registeredRoutes.includes('/api/zn-agent-client/seats'), '/seats route should be registered')
-assert.ok(registeredRoutes.includes('/api/zn-agent-client/seat-prepare'), '/seat-prepare route should be registered')
-assert.equal(registeredRoutes.length, 8, 'six CLI routes + two seat routes expected')
+assert.equal(registeredRoutes.length, 6, 'six CLI routes expected')
 assert.ok(emitted.some(e => e.event === 'zn-agent-client/ready'), 'ready event should be emitted')
 
 // list_acp_agents 直接执行即可（不 spawn 进程）。

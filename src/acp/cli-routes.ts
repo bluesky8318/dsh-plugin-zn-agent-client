@@ -64,7 +64,7 @@ export interface RouteResponse {
   headersSent?: boolean
 }
 
-/** 发一个 JSON 响应。（cli-seats.ts 的座位路由复用同一组 HTTP 小工具。） */
+/** 发一个 JSON 响应。 */
 export function json(res: RouteResponse, status: number, payload: unknown): RouteResponse {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
@@ -74,7 +74,7 @@ export function json(res: RouteResponse, status: number, payload: unknown): Rout
   return res
 }
 
-/** 读取并解析 JSON 请求体（带 256KB 上限）。（座位路由复用。） */
+/** 读取并解析 JSON 请求体（带 256KB 上限）。 */
 export async function readJsonBody(req: RouteRequest, limit = 256 * 1024): Promise<Record<string, unknown> | null> {
   const chunks: Buffer[] = []
   let size = 0

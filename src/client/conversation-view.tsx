@@ -4,7 +4,7 @@
  * 注册 `conversation.view` 槽位（billion-context 的上下文视图同款机制）。
  * 终端传输是插件自己的宿主路由（agent-stream.ts）：服务端持有 PTY 并负责
  * 「启动命令只敲一次」，浏览器侧 xterm 只管渲染/键击/拟合。终端实例按
- * 「DSH会话×agent」复合键隔离（方案A 座位）：同一 agent 在不同 DSH 会话里
+ * 「DSH会话×agent」复合键隔离：同一 agent 在不同 DSH 会话里
  * 是完全独立的实例，切芯片/挂卸视图都不会杀进程或重复敲键。
  * @module dsh-plugin-zn-agent-client/client/conversation-view
  */
@@ -19,7 +19,6 @@ import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
 import { getExternalOpener } from './remote-external.ts'
 import { compositeTerminalId } from './agent-stream.ts'
-import { fetchSeat, registerSeat, createSeatSession, refreshSeatsSoon } from './seats.ts'
 
 /** 读页面明暗方案（只用于在切换时触发主题重读）。 */
 function useColorScheme(): 'dark' | 'light' {
@@ -78,21 +77,7 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
     displayName: agent.displayName,
   })), [agents])
 
-  // 座位（方案A）：本会话注册过座位时自动选中对应 agent——重进会话即回到
-  // 它的 CLI 实例，而不是回落到第一个 agent。
-  const [seatAgentId, setSeatAgentId] = useState<string | null>(null)
-  useEffect(() => {
-    let alive = true
-    void fetchSeat(sessionId).then((seat) => {
-      if (!alive || seat === null) return
-      if (targets.some((target: TermTarget) => target.id === seat.agentId)) setSeatAgentId(seat.agentId)
-    }).catch(() => { /* 查不到座位：维持手动选择 */ })
-    return () => { alive = false }
-  }, [sessionId, targets])
-
-  const active = targets.find((target: TermTarget) => target.id === selectedId)
-    ?? targets.find((target: TermTarget) => target.id === seatAgentId)
-    ?? targets[0]
+  const active = targets.find((target: TermTarget) => target.id === selectedId) ?? targets[0]
 
   if (targets.length === 0) return <div className="znac-view" data-znacp-cli-view="true"><p className="znac-view-empty">{t('view.empty')}</p></div>
 
@@ -145,21 +130,8 @@ function formatTime(value: string): string {
   // 显式启动记录：只有人点过「＋新会话/历史/继续」或实例确实在跑，才挂终端；
   // 防止首次打开视图就静默 spawn 一个 PTY 新会话（会话膨胀的根源）。
   const [launchedIds, setLaunchedIds] = useState<ReadonlySet<string>>(new Set())
-  // 本会话是该 agent 的座位（方案A）：注册过即视为已启动——切回会话时直接
-  // 恢复终端视图（PTY 宿主侧保活，attach 即回放屏幕）。
-  const [isSeat, setIsSeat] = useState(false)
-  const [seatCreating, setSeatCreating] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const pickerRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    void fetchSeat(sessionId).then((seat) => {
-      if (!alive) return
-      if (seat !== null && seat.agentId === agentId) setIsSeat(true)
-    }).catch(() => { /* 查不到座位：等首次启动动作时懒注册 */ })
-    return () => { alive = false }
-  }, [sessionId, agentId])
 
   useEffect(() => {
     setSession(acquireSession(agentId, sessionId))
@@ -252,17 +224,10 @@ function formatTime(value: string): string {
     }
   }, [histOpen])
 
-  const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string, cli?: { resumeTarget: string; summary: string }): void => {
+  const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
     setHistOpen(false)
     setLaunchedIds((prev) => { const next = new Set(prev); next.add(agentId); return next })
     showToast(action.mode === 'new' ? t('view.newCreated') : label)
-    // 懒座位注册（方案A）：任何会话里第一次启动 CLI 都自动登记为座位——
-    // 侧栏行、标题同步、装饰立刻生效。已注册时 upsert 幂等。
-    void registerSeat({
-      session: sessionId,
-      agentId,
-      ...(cli !== undefined ? { cliSessionId: cli.resumeTarget, cliTitle: cli.summary } : {}),
-    }).then(() => refreshSeatsSoon()).catch(() => { /* 注册失败不影响终端本身 */ })
     void session?.openSession(action, label)
   }
 
@@ -315,22 +280,6 @@ function formatTime(value: string): string {
         >
           {t('view.newSession')}
         </button>
-        <button
-          type="button"
-          className="znac-view-sbtn"
-          disabled={seatCreating || session === null}
-          aria-label={t('view.newSeat')}
-          onClick={() => {
-            if (seatCreating) return
-            setSeatCreating(true)
-            void createSeatSession(agentId, sessionId)
-              .then(() => { showToast(t('view.seatCreated')); refreshSeatsSoon() })
-              .catch((error: unknown) => { showToast(`${t('view.seatFailed')}: ${error instanceof Error ? error.message : String(error)}`) })
-              .finally(() => { setSeatCreating(false) })
-          }}
-        >
-          {seatCreating ? t('view.seatCreating') : t('view.newSeat')}
-        </button>
         <div className="znac-view-histwrap" ref={histRef}>
           <button
             type="button"
@@ -351,7 +300,7 @@ function formatTime(value: string): string {
                   type="button"
                   role="menuitem"
                   className="znac-view-hist-item"
-                  onClick={() => { runAction({ mode: 'resume', resumeTarget: item.id, ...(item.cwd !== undefined && item.cwd !== '' ? { cwd: item.cwd } : {}) }, `${t('view.labelResume')} ${shortId(item.id)}`, { resumeTarget: item.id, summary: item.summary }) }}
+                  onClick={() => { runAction({ mode: 'resume', resumeTarget: item.id, ...(item.cwd !== undefined && item.cwd !== '' ? { cwd: item.cwd } : {}) }, `${t('view.labelResume')} ${shortId(item.id)}`) }}
                 >
                   <span className="znac-view-hist-summary">{item.summary}</span>
                   <span className="znac-view-hist-meta">{formatTime(item.updatedAt)}</span>
@@ -389,7 +338,7 @@ function formatTime(value: string): string {
       </div>
       <EmbeddedTerminal
         session={session}
-        active={agentStates[compositeTerminalId(sessionId, agentId)] === 'running' || launchedIds.has(agentId) || isSeat}
+        active={agentStates[compositeTerminalId(sessionId, agentId)] === 'running' || launchedIds.has(agentId)}
         idleHint={t('view.idleHint')}
         displayName={displayName}
         launchingLabel={t('view.launching')}

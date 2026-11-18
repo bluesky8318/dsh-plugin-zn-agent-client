@@ -769,30 +769,6 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znac-view-agentitem[data-active='true'] { background: var(--dsw-alias-state-business-primary); color: var(--dsw-alias-label-primary); }
 .znac-view-agentname { flex: 1; }
 
-/* ── 侧栏座位装饰（方案A）：leading 芯片 + hover 详情卡 ── */
-.znac-row-chip {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 16px; height: 16px; flex: none;
-  border-radius: 4px; margin-right: 2px;
-  font-size: 12px; font-weight: 500; line-height: 1;
-  color: var(--dsw-alias-label-primary);
-  background: var(--dsw-alias-state-business-primary);
-}
-.znac-row-chip[data-state='exited'] { opacity: 0.55; }
-.znac-row-chip[data-state='running'] { box-shadow: 0 0 0 1.5px var(--dsw-alias-state-success-primary); }
-.znac-row-hover {
-  display: flex; flex-direction: column; gap: 2px;
-  font-size: 12px; line-height: 1.4;
-  color: var(--dsw-alias-label-secondary);
-  padding: 2px 0;
-}
-.znac-row-hover-line { display: flex; gap: 8px; min-width: 0; }
-.znac-row-hover-k { flex: none; width: 56px; opacity: 0.75; }
-.znac-row-hover-line span:last-child {
-  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--dsw-alias-label-primary);
-}
-.znac-row-hover[data-state='running'] .znac-row-hover-line:last-child span:last-child { color: var(--dsw-alias-state-success-primary); }
 
 `
 

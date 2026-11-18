@@ -40,9 +40,6 @@ export type ZnAgentClientLocaleKey =
   | 'view.idleHint' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
-  | 'view.newSeat' | 'view.seatCreating' | 'view.seatCreated' | 'view.seatFailed'
-  | 'seat.chipLabel' | 'seat.hoverAgent' | 'seat.hoverCli' | 'seat.hoverWorkspace'
-  | 'seat.hoverState' | 'seat.stateRunning' | 'seat.stateExited' | 'seat.stateNone'
 
 /** 英文文案。 */
 export const en: Record<ZnAgentClientLocaleKey, string> = {
@@ -119,18 +116,6 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalOpening': 'Opening…',
   'view.externalOpened': 'Opened',
   'view.externalFailed': 'Open failed',
-  'view.newSeat': '+ CLI session',
-  'view.seatCreating': 'Creating…',
-  'view.seatCreated': 'New CLI session created.',
-  'view.seatFailed': 'Create CLI session failed',
-  'seat.chipLabel': 'CLI agent seat',
-  'seat.hoverAgent': 'Agent',
-  'seat.hoverCli': 'CLI session',
-  'seat.hoverWorkspace': 'Workspace',
-  'seat.hoverState': 'State',
-  'seat.stateRunning': 'running',
-  'seat.stateExited': 'exited',
-  'seat.stateNone': 'not running',
 }
 
 /** 中文文案。 */
@@ -208,16 +193,4 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalOpening': '正在打开…',
   'view.externalOpened': '已打开',
   'view.externalFailed': '打开失败',
-  'view.newSeat': '+ CLI 会话',
-  'view.seatCreating': '创建中…',
-  'view.seatCreated': '已在侧栏创建新的 CLI 会话。',
-  'view.seatFailed': '创建 CLI 会话失败',
-  'seat.chipLabel': 'CLI agent 座位',
-  'seat.hoverAgent': 'Agent',
-  'seat.hoverCli': 'CLI 会话',
-  'seat.hoverWorkspace': '工作区',
-  'seat.hoverState': '状态',
-  'seat.stateRunning': '运行中',
-  'seat.stateExited': '已退出',
-  'seat.stateNone': '未运行',
 }
