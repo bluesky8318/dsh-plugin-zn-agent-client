@@ -64,8 +64,8 @@ export interface RouteResponse {
   headersSent?: boolean
 }
 
-/** 发一个 JSON 响应。 */
-function json(res: RouteResponse, status: number, payload: unknown): RouteResponse {
+/** 发一个 JSON 响应。（cli-seats.ts 的座位路由复用同一组 HTTP 小工具。） */
+export function json(res: RouteResponse, status: number, payload: unknown): RouteResponse {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
     'cache-control': 'no-store',
@@ -74,8 +74,8 @@ function json(res: RouteResponse, status: number, payload: unknown): RouteRespon
   return res
 }
 
-/** 读取并解析 JSON 请求体（带 256KB 上限）。 */
-async function readJsonBody(req: RouteRequest, limit = 256 * 1024): Promise<Record<string, unknown> | null> {
+/** 读取并解析 JSON 请求体（带 256KB 上限）。（座位路由复用。） */
+export async function readJsonBody(req: RouteRequest, limit = 256 * 1024): Promise<Record<string, unknown> | null> {
   const chunks: Buffer[] = []
   let size = 0
   try {
@@ -96,15 +96,15 @@ async function readJsonBody(req: RouteRequest, limit = 256 * 1024): Promise<Reco
   }
 }
 
-function guarded(req: RouteRequest): boolean {
+export function guarded(req: RouteRequest): boolean {
   return req.headers?.[GUARD_HEADER] === '1'
 }
 
-function ok(result: Record<string, unknown>): Record<string, unknown> {
+export function ok(result: Record<string, unknown>): Record<string, unknown> {
   return { ok: true, ...result }
 }
 
-function fail(res: RouteResponse, status: number, message: string): RouteResponse {
+export function fail(res: RouteResponse, status: number, message: string): RouteResponse {
   return json(res, status, { ok: false, error: message })
 }
 
@@ -130,6 +130,9 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     if (agentId === '') return void fail(res, 400, 'missing agent id')
     const agent = resolveAgent(agentId)
     if (agent === null) return void fail(res, 404, `未找到入口：${agentId}`)
+    // PTY id：方案A 用 `DSH会话id:agentId` 复合键（每个 DSH 会话一个实例）；
+    // 旧客户端只带 id（=agentId）时退回全局实例，行为不变。
+    const terminalId = typeof body.terminal === 'string' && body.terminal.trim() !== '' ? body.terminal.trim() : agentId
     const fromSession = typeof body.session === 'string' && body.session !== ''
       ? options.resolveSessionCwd?.(body.session)
       : undefined
@@ -147,7 +150,7 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     const bodyCwd = typeof body.cwd === 'string' && body.cwd !== '' ? body.cwd : undefined
     try {
       const term = await controller.openTerminal({
-        id: agent.id,
+        id: terminalId,
         agentId: agent.id,
         displayName: agent.displayName,
         command: agent.command,
@@ -177,7 +180,9 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
   async function stream(req: RouteRequest, res: RouteResponse): Promise<void> {
     if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
     const body = await readJsonBody(req)
-    const id = typeof body?.id === 'string' && body.id !== '' ? body.id : ''
+    // terminal 复合键优先（方案A），兼容旧客户端只带 id。
+    const id = typeof body?.terminal === 'string' && body.terminal !== '' ? body.terminal
+      : typeof body?.id === 'string' && body.id !== '' ? body.id : ''
     const term = id === '' ? undefined : controller.getTerminal(id)
     if (term === undefined) return void fail(res, 404, 'terminal not found')
     res.writeHead(200, {
@@ -209,7 +214,8 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
     const body = await readJsonBody(req)
     if (body === null) return void fail(res, 400, 'invalid body')
-    const id = typeof body.id === 'string' ? body.id : ''
+    const id = typeof body.terminal === 'string' && body.terminal !== '' ? body.terminal
+      : typeof body.id === 'string' ? body.id : ''
     const term: ManagedTerminal | undefined = id === '' ? undefined : controller.getTerminal(id)
     if (term === undefined) return void fail(res, 404, 'terminal not found')
     try {
@@ -230,7 +236,8 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
     if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
     const body = await readJsonBody(req)
     if (body === null) return void fail(res, 400, 'invalid body')
-    const id = typeof body.id === 'string' ? body.id : ''
+    const id = typeof body.terminal === 'string' && body.terminal !== '' ? body.terminal
+      : typeof body.id === 'string' ? body.id : ''
     const closed = id === '' ? false : await controller.close(id)
     return void json(res, 200, ok({ closed, terminals: controller.listStatus() }))
   }

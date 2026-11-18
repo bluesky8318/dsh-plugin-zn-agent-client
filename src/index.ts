@@ -21,6 +21,7 @@ import { SessionIndex } from './acp/session-index.ts'
 import { createZnAgentClientRemote } from './acp/remote-service.ts'
 import { CliTerminalController, type SubprocessFace } from './acp/cli-terminal.ts'
 import { createCliTerminalRoutes, type WebServerFace, type RouteRequest, type RouteResponse } from './acp/cli-routes.ts'
+import { CliSeatStore, createSeatRoutes } from './acp/cli-seats.ts'
 import { openInExternalTerminal, type ExternalTerminal } from './external-terminal.ts'
 import type { AgentConfig } from './types/index.ts'
 
@@ -28,7 +29,7 @@ import type { AgentConfig } from './types/index.ts'
 export const name = 'dsh-plugin-zn-agent-client'
 
 /** 依赖的宿主服务：tools 注册工具，subagents 注册子代理提供方。 */
-export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions']
+export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions', 'sessionTitle', 'workspaceRegistry']
 
 /** 插件配置（设置命名空间由 cordis.patch.yml 行 id 派生）。 */
 export interface Config {
@@ -123,6 +124,8 @@ export function apply(ctx: Context, config: Config): void {
   const hostCtx = ctx as Context & {
     workingDirectory?: { defaultDirectory?: string; get(session: unknown): string }
     sessions?: { get?(id: string): unknown }
+    sessionTitle?: { rename?(session: unknown, title: string): unknown }
+    workspaceRegistry?: { resolveByPath?(path: string): Promise<{ id: string } | undefined> }
   }
   const cwdFace = hostCtx.workingDirectory
   /** 从工具运行上下文解析调用方会话的工作目录；解析不到时退回进程 cwd。 */
@@ -165,20 +168,9 @@ export function apply(ctx: Context, config: Config): void {
   } else {
     const defaultCwd = (): string => cwdFace?.defaultDirectory ?? process.cwd()
     const controller = new CliTerminalController(cliSubprocess, defaultCwd)
-    for (const route of createCliTerminalRoutes(controller, {
-      resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
-      defaultCwd,
-      // id 字符串必须先经 sessions.get 解析成会话对象，再交给 workingDirectory.get
-      // （投影 cellFor 直接读 session.snapshotEvents()，传字符串会抛
-      // session.snapshotEvents is not a function）。
-      resolveSessionCwd: (sessionId: string) => {
-        const session = hostCtx.sessions?.get?.(sessionId)
-        return session === undefined ? undefined : cwdFace?.get(session)
-      },
-    })) {
-      // effect 回调直接返回 webServer.register 的结果——它就是注销函数，
-      // 插件停用/重载时由 cordis 调用，避免旧路由残留（旧闭包上下文已死，
-      // 会报 cannot get required service ... in inactive context）。
+    /** 同一套注册体跑终端路由与座位路由：effect 回调返回注销函数，插件停用/重载时由 cordis 调用，
+     *  避免旧路由残留（旧闭包上下文已死，会报 cannot get required service ... in inactive context）。 */
+    const registerRoute = (route: { path: string; method: string; handler: (req: RouteRequest, res: RouteResponse) => Promise<void> }): void => {
       ctx.effect(
         () => {
           let dispose: (() => void) | undefined
@@ -194,30 +186,30 @@ export function apply(ctx: Context, config: Config): void {
             }
             purge(cliWebServer)
             dispose = cliWebServer.register({
-            kind: 'exact',
-            path: route.path,
-            handler: (req: RouteRequest, res: RouteResponse): void => {
-              // 'exact' 路由仍会收到其他路径/方法的请求，照参考插件做二次校验。
-              const pathname = (req.url ?? '').split('?')[0]
-              if (pathname !== route.path) {
-                res.writeHead(404)
-                res.end()
-                return
-              }
-              if (req.method !== route.method) {
-                res.writeHead(405, { allow: route.method })
-                res.end()
-                return
-              }
-              void route.handler(req, res).catch((error: unknown) => {
-                if (res.headersSent !== true) {
-                  res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
-                  const stack = error instanceof Error ? error.stack : undefined
-                  res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), stack }))
+              kind: 'exact',
+              path: route.path,
+              handler: (req: RouteRequest, res: RouteResponse): void => {
+                // 'exact' 路由仍会收到其他路径/方法的请求，照参考插件做二次校验。
+                const pathname = (req.url ?? '').split('?')[0]
+                if (pathname !== route.path) {
+                  res.writeHead(404)
+                  res.end()
+                  return
                 }
-              })
-            },
-          })
+                if (req.method !== route.method) {
+                  res.writeHead(405, { allow: route.method })
+                  res.end()
+                  return
+                }
+                void route.handler(req, res).catch((error: unknown) => {
+                  if (res.headersSent !== true) {
+                    res.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
+                    const stack = error instanceof Error ? error.stack : undefined
+                    res.end(JSON.stringify({ ok: false, error: error instanceof Error ? error.message : String(error), stack }))
+                  }
+                })
+              },
+            })
           } catch (error) {
             // 旧周期遗留的未注销路由会触发 duplicate；一次性完全重启应用才能清掉。
             log(`路由 ${route.path} 注册失败（可能有旧周期残留路由，需重启应用一次）：${error instanceof Error ? error.message : String(error)}`)
@@ -227,7 +219,43 @@ export function apply(ctx: Context, config: Config): void {
         `${name}: ${route.method} ${route.path}`,
       )
     }
+    for (const route of createCliTerminalRoutes(controller, {
+      resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
+      defaultCwd,
+      // id 字符串必须先经 sessions.get 解析成会话对象，再交给 workingDirectory.get
+      // （投影 cellFor 直接读 session.snapshotEvents()，传字符串会抛
+      // session.snapshotEvents is not a function）。
+      resolveSessionCwd: (sessionId: string) => {
+        const session = hostCtx.sessions?.get?.(sessionId)
+        return session === undefined ? undefined : cwdFace?.get(session)
+      },
+    })) {
+      registerRoute(route)
+    }
+    // 座位路由（方案A）：CLI 实例 ↔ DSH 会话映射 + 标题同步。
+    const seatStore = new CliSeatStore()
+    void seatStore.load()
+    for (const route of createSeatRoutes(seatStore, {
+      resolveAgent: (agentId: string) => resolveAgentConfig(agentId),
+      resolveSessionCwd: (sessionId: string) => {
+        const session = hostCtx.sessions?.get?.(sessionId)
+        return session === undefined ? undefined : cwdFace?.get(session)
+      },
+      defaultCwd,
+      resolveWorkspaceId: async (cwd: string) => {
+        const workspace = await hostCtx.workspaceRegistry?.resolveByPath?.(cwd)
+        return workspace?.id ?? null
+      },
+      getSession: (sessionId: string) => hostCtx.sessions?.get?.(sessionId),
+      renameTitle: (session: unknown, title: string) => { hostCtx.sessionTitle?.rename?.(session, title) },
+      terminalState: (terminalId: string) => controller.getTerminal(terminalId)?.status.state,
+      agentDisplayName: (agentId: string) => resolveAgentConfig(agentId)?.displayName ?? agentId,
+      log,
+    })) {
+      registerRoute(route)
+    }
     ctx.effect(() => () => controller.dispose(), `${name}: cli terminal controller`)
+    ctx.effect(() => () => { void seatStore.dispose() }, `${name}: cli seat store`)
   }
 
   /**

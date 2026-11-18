@@ -28,6 +28,8 @@ import { en, zh, type ZnAgentClientLocaleKey } from './locales.ts'
 import { registerShellOverlay } from './shell-overlay.tsx'
 import { registerSidebarAction } from './sidebar-action.tsx'
 import { registerConversationView } from './conversation-view.tsx'
+import { registerSidebarDecorations } from './sidebar-decorations.tsx'
+import { registerSeatsInfrastructure } from './seats.ts'
 import { mountExternalLauncher } from './remote-external.ts'
 import { disposeAllSessions } from './agent-stream.ts'
 import { injectStyles } from './styles.ts'
@@ -69,6 +71,9 @@ export function apply(ctx: Context): void {
   registerShellOverlay(ctx, controller)
   registerSidebarAction(ctx)
   registerConversationView(ctx, controller)
+  // 座位（方案A）：uiWorkspace 捕获（建座）+ 侧栏行装饰（芯片/悬停卡）。
+  registerSeatsInfrastructure(ctx)
+  registerSidebarDecorations(ctx)
 
   // 远端挂载是异步的；失败安静降级（按钮隐藏），不阻塞其余 UI 面。
   void mountExternalLauncher(ctx)

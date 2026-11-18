@@ -130,6 +130,8 @@ const parkingNode: HTMLElement | null = typeof document === 'undefined'
  */
 export class AgentTerminalSession {
   readonly agentId: string
+  /** PTY 复合键 `DSH会话id:agentId`（方案A 每会话一实例）；宿主路由用它找终端。 */
+  readonly terminalId: string
   private readonly listeners = new Set<() => void>()
   private snapshotState: SessionState = INITIAL_STATE
   sessionKey: string
@@ -150,8 +152,9 @@ export class AgentTerminalSession {
   private observer: ResizeObserver | undefined
   private lastDimensions: ITerminalDimensions | undefined
 
-  constructor(agentId: string, sessionKey = '') {
+  constructor(agentId: string, terminalId: string, sessionKey = '') {
     this.agentId = agentId
+    this.terminalId = terminalId
     this.sessionKey = sessionKey
     // xterm/WebGL 延迟到首次 attach 到可见容器才创建：在隐藏节点里初始化
     // 渲染器会拿到 0x0 尺寸的 glyph atlas 与错误的 canvas 尺寸，首开就会
@@ -299,6 +302,7 @@ export class AgentTerminalSession {
         headers: { ...GUARD },
         body: JSON.stringify({
           id: this.agentId,
+          terminal: this.terminalId,
           session: this.sessionKey,
           cols: dims?.cols,
           rows: dims?.rows,
@@ -354,7 +358,7 @@ export class AgentTerminalSession {
     const response = await fetch(STREAM_URL, {
       method: 'POST',
       headers: { ...GUARD },
-      body: JSON.stringify({ id: this.agentId }),
+      body: JSON.stringify({ id: this.agentId, terminal: this.terminalId }),
       signal: controller.signal,
     })
     if (!response.ok || response.body === null) {
@@ -448,7 +452,7 @@ export class AgentTerminalSession {
         await fetch(INPUT_URL, {
           method: 'POST',
           headers: { ...GUARD },
-          body: JSON.stringify({ id: this.agentId, type: 'write', data: payload.slice(offset, offset + 16384) }),
+          body: JSON.stringify({ id: this.agentId, terminal: this.terminalId, type: 'write', data: payload.slice(offset, offset + 16384) }),
         })
       } catch {
         return // 传输断了：reconnect 循环会重建流，未确认的键击不重放。
@@ -475,7 +479,7 @@ export class AgentTerminalSession {
       void fetch(INPUT_URL, {
         method: 'POST',
         headers: { ...GUARD },
-        body: JSON.stringify({ id: this.agentId, type: 'resize', cols: dims.cols, rows: dims.rows }),
+        body: JSON.stringify({ id: this.agentId, terminal: this.terminalId, type: 'resize', cols: dims.cols, rows: dims.rows }),
       }).catch(() => {})
     })
   }
@@ -502,20 +506,26 @@ export class AgentTerminalSession {
   }
 }
 
-/** agentId → 会话注册表：进程与屏幕状态跨 React 挂载存活。 */
+/** PTY 复合键 → 会话注册表：进程与屏幕状态跨 React 挂载存活（方案A 每个DSH会话独立实例）。 */
 const sessions = new Map<string, AgentTerminalSession>()
 
-/** 取（或建）一个 agent 的会话；sessionKey 用于宿主解析工作区目录。 */
+/** PTY 复合键：同一 agent 在不同 DSH 会话里是完全独立的实例。 */
+export function compositeTerminalId(sessionId: string, agentId: string): string {
+  return `${sessionId}:${agentId}`
+}
+
+/** 取（或建）一个「DSH会话×agent」的终端会话；sessionKey 用于宿主解析工作区目录。 */
 export function acquireSession(agentId: string, sessionKey = ''): AgentTerminalSession {
-  const existing = sessions.get(agentId)
+  const terminalId = compositeTerminalId(sessionKey, agentId)
+  const existing = sessions.get(terminalId)
   if (existing !== undefined) {
     // sessionKey 必须跟随当前会话：切到其它工作区的会话时更新 key，
     // 否则后续 /open、/sessions 都按旧工作区解析 cwd（默认工作区不跟随的根因）。
     if (sessionKey !== '') existing.sessionKey = sessionKey
     return existing
   }
-  const session = new AgentTerminalSession(agentId, sessionKey)
-  sessions.set(agentId, session)
+  const session = new AgentTerminalSession(agentId, terminalId, sessionKey)
+  sessions.set(terminalId, session)
   return session
 }
 

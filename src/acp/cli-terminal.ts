@@ -453,7 +453,7 @@ export class CliTerminalController {
 
   private async open(options: OpenTerminalOptions): Promise<ManagedTerminal> {
     if (this.disposed) throw new Error('终端控制器已关闭')
-    if (typeof options.id !== 'string' || !/^[a-zA-Z0-9_-]{1,64}$/.test(options.id)) throw new Error('无效的终端 ID')
+    if (typeof options.id !== 'string' || !/^[a-zA-Z0-9_:-]{1,128}$/.test(options.id)) throw new Error('无效的终端 ID') // 允许 `:`：方案A 复合键 `DSH会话id:agentId`
     // new/continue/resume 都是「换会话」——正在跑的 TUI 必须先退掉再重新拉起。
     const wantsFresh = options.restart === true || options.mode === 'new' || options.mode === 'continue' || options.mode === 'resume'
     if (wantsFresh) await this.close(options.id)
