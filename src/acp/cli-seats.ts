@@ -233,6 +233,38 @@ export function createSeatRoutes(
       : `CLI·${display}`
   }
 
+  /**
+   * 座位标记：给会话写入一对空 turn 事件（`turn/start` + `turn/end`，无任何
+   * 消息），解除会话的 blank 状态。
+   *
+   * 为什么必须：DSH 侧栏 `sessionVisible` 对 blank 会话「除当前打开外一律
+   * 隐藏」，且 blank 行标题强制显示「新会话」、搜索排除、`sidebar.session
+   * .row.leading` 槽位不挂载（`!row.blank`）。blank 的唯一解除条件是日志里
+   * 出现 `turn/start` 事件（`applySessionListMetadata`）。写入一对已完成、
+   * 无消息的 turn 是最小标记：不触发 agent、不产生模型调用，代理循环的
+   * lastTurn 折叠会接续该编号。
+   */
+  const markSeatTurn = (dshSessionId: string): void => {
+    const session = deps.getSession?.(dshSessionId) as
+      | { snapshotEvents?(): unknown[]; append(type: string, data: unknown): void }
+      | undefined
+      | null
+    if (session === undefined || session === null) return
+    try {
+      const events = (typeof session.snapshotEvents === 'function' ? session.snapshotEvents() : []) as Array<{ type: string; data?: { turn?: unknown } }>
+      // 只标记 blank 会话（日志里从未有过 turn/start）。正常会话（有历史轮次）
+      // 已经非 blank，不需要也不应该被追加幻影 turn。
+      const hasTurn = events.some((event) => event.type === 'turn/start')
+      if (hasTurn) return
+      const last = [...events].reverse().find((event) => event.type === 'turn/start')
+      const turn = Number(last?.data?.turn ?? 0) + 1
+      session.append('turn/start', { turn })
+      session.append('turn/end', { turn, reason: { kind: 'completed' } })
+    } catch (error) {
+      deps.log?.(`座位标记失败 ${dshSessionId}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+
   /** 注册后启动监听：等 CLI 侧出现新会话（首条消息落盘）→ 回填 + 二段改名。 */
   const startWatcher = (seat: CliSeatRecord): void => {
     const agent = deps.resolveAgent(seat.agentId)
@@ -314,14 +346,16 @@ export function createSeatRoutes(
           const cliSessionId = typeof body.cliSessionId === 'string' && body.cliSessionId !== '' ? body.cliSessionId : undefined
           const cliTitle = typeof body.cliTitle === 'string' && body.cliTitle !== '' ? body.cliTitle : undefined
           const seat = await store.register({
-    dshSessionId: sessionId,
-    agentId,
-    cwd,
-    ...(cliSessionId !== undefined ? { cliSessionId } : {}),
-    ...(cliTitle !== undefined ? { cliTitle } : {}),
-  })
+            dshSessionId: sessionId,
+            agentId,
+            cwd,
+            ...(cliSessionId !== undefined ? { cliSessionId } : {}),
+            ...(cliTitle !== undefined ? { cliTitle } : {}),
+          })
           // 一段改名（注册即钉住 `CLI·<agent>`）；resume 流程带 cliTitle 直接二段。
           pinTitle(sessionId, titleFor(seat))
+          // 解除 blank：侧栏可见/可搜索/装饰槽位的共同前提（见 markSeatTurn 注释）。
+          markSeatTurn(sessionId)
           if (cliSessionId === undefined || cliTitle === undefined) startWatcher(seat)
           // resume 且已带 cliTitle：标题已钉，无需监听。
           deps.log?.(`座位已注册: ${sessionId} → ${agentId} @ ${cwd}`)
