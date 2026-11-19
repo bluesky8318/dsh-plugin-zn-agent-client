@@ -56,6 +56,11 @@ export type ZnAgentClientLocaleKey =
   | 'board.previewUnsupported' | 'board.previewEmpty' | 'board.roleUser' | 'board.roleAssistant'
   | 'board.previewFailed'
   | 'board.configMissing' | 'board.configSave' | 'board.configSaved' | 'board.configSaveFailed' | 'board.configLoadFailed'
+  | 'board.configPreview'
+  | 'board.configEdit'
+  | 'board.mdCopy'
+  | 'board.mdCopied'
+  | 'board.mdFootnotes'
   | 'board.analysisWip'
 
 /** 英文文案。 */
@@ -173,7 +178,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'board.configSave': 'Save',
   'board.configSaved': 'AGENTS.md saved',
   'board.configSaveFailed': 'Failed to save AGENTS.md',
-  'board.configLoadFailed': 'Failed to load AGENTS.md',
+  'board.configLoadFailed': 'Failed to load AGENTS.md', 'board.configPreview': 'Preview', 'board.configEdit': 'Edit', 'board.mdCopy': 'Copy', 'board.mdCopied': 'Copied', 'board.mdFootnotes': 'Footnotes',
   'board.analysisWip': 'Under construction — reserved for workspace analytics',
   'board.archived': 'Archived',
   'board.stRunning': 'Running',
@@ -298,7 +303,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'board.configSave': '保存',
   'board.configSaved': 'AGENTS.md 已保存',
   'board.configSaveFailed': 'AGENTS.md 保存失败',
-  'board.configLoadFailed': 'AGENTS.md 读取失败',
+  'board.configLoadFailed': 'AGENTS.md 读取失败', 'board.configPreview': '预览', 'board.configEdit': '编辑', 'board.mdCopy': '复制', 'board.mdCopied': '已复制', 'board.mdFootnotes': '脚注',
   'board.analysisWip': '建设中——这个页签留给工作区分析',
   'board.archived': '已归档',
   'board.stRunning': '运行中',

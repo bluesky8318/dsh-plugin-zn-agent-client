@@ -25,7 +25,7 @@ const lib = {
  * 其余依赖一律内联（noExternal），防止 require 到模块表回答不了的 specifier。
  * react/jsx-runtime 由 jsx: react-jsx 自动引入，一并列出。
  */
-const CLIENT_EXTERNALS = ['react', 'react/jsx-runtime', 'zod']
+const CLIENT_EXTERNALS = ['react', 'react/jsx-runtime', 'zod', '@deepseek-ai/dsh-client-ui-primitives']
 const client = {
   name: 'dsh-plugin-zn-agent-client',
   entry: { client: 'src/client/index.ts' },

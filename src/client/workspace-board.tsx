@@ -22,6 +22,10 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 import type { Context } from '@deepseek-ai/cordis'
 // SlotMap 的 'main' 键由 layout 包声明合并；不引入则 register('main') 编译不过。
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
+// AGENTS.md 预览：宿主自带的 untrusted-Markdown 渲染器（mdast 管线，raw HTML
+// 永远不渲染为标记、不安全协议禁用）。模块表在运行时提供该包（conversation/chat
+// 同样以外部 require 消费它），构建侧在 tsdown CLIENT_EXTERNALS 声明为 external。
+import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
 import { LOCALE_NAMESPACE, GUARD_HEADER } from './constants.ts'
 import type { CliSessionEntry } from './agent-stream.ts'
 import { listSessions } from './agent-stream.ts'
@@ -489,6 +493,16 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
   const [configState, setConfigState] = useState<{ readonly exists: boolean; readonly content: string; readonly path: string } | null>(null)
   const [configDraft, setConfigDraft] = useState('')
   const [configLoading, setConfigLoading] = useState(false)
+  // 预览/编辑双模式：默认预览（有内容时），文件不存在则直接进编辑。
+  const [configMode, setConfigMode] = useState<'preview' | 'edit'>('edit')
+  useEffect(() => {
+    if (configState !== null) setConfigMode(configState.exists && configState.content !== '' ? 'preview' : 'edit')
+  }, [configState])
+  // MarkdownText 要求 labels 引用稳定（新引用会丢弃流式渲染缓存），按 locale 身份 memo。
+  const mdLabels = useMemo(() => ({
+    code: { copyLabel: t('board.mdCopy'), copiedLabel: t('board.mdCopied') },
+    footnotes: t('board.mdFootnotes'),
+  }), [t])
 
   useEffect(() => {
     if (tab !== 'config' || wsId === '') return
@@ -700,15 +714,27 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
               <>
                 <div className="znb-config-bar">
                   <span className="znb-config-path">{configState.exists ? configState.path : t('board.configMissing')}</span>
-                  <button type="button" className="znb-copybtn" onClick={() => { saveConfig() }}>{t('board.configSave')}</button>
+                  <span className="znb-seg" role="tablist">
+                    <button type="button" role="tab" aria-selected={configMode === 'preview'} className={configMode === 'preview' ? 'znb-seg-btn znb-seg-on' : 'znb-seg-btn'} onClick={() => { setConfigMode('preview') }}>{t('board.configPreview')}</button>
+                    <button type="button" role="tab" aria-selected={configMode === 'edit'} className={configMode === 'edit' ? 'znb-seg-btn znb-seg-on' : 'znb-seg-btn'} onClick={() => { setConfigMode('edit') }}>{t('board.configEdit')}</button>
+                  </span>
+                  {configMode === 'edit' && (
+                    <button type="button" className="znb-copybtn" onClick={() => { saveConfig() }}>{t('board.configSave')}</button>
+                  )}
                 </div>
-                <textarea
-                  className="znb-editor"
-                  value={configDraft}
-                  spellCheck={false}
-                  onChange={(event) => { setConfigDraft(event.target.value) }}
-                  aria-label={t('board.tabConfig')}
-                />
+                {configMode === 'preview' ? (
+                  <div className="znb-config-preview">
+                    <MarkdownText text={configDraft} labels={mdLabels} />
+                  </div>
+                ) : (
+                  <textarea
+                    className="znb-editor"
+                    value={configDraft}
+                    spellCheck={false}
+                    onChange={(event) => { setConfigDraft(event.target.value) }}
+                    aria-label={t('board.tabConfig')}
+                  />
+                )}
               </>
             )}
           </div>

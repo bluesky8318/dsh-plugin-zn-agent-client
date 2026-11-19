@@ -831,6 +831,13 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-config { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 10px 14px; }
 .znb-config-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .znb-config-path { flex: 1; min-width: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.znb-seg { display: flex; align-items: center; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; overflow: hidden; }
+.znb-seg-btn { border: none; background: transparent; color: var(--dsw-alias-label-secondary); font-size: 12px; line-height: 18px; padding: 2px 10px; cursor: pointer; }
+.znb-seg-btn + .znb-seg-btn { border-left: 0.5px solid var(--dsw-alias-border-l1); }
+.znb-seg-btn:hover { color: var(--dsw-alias-label-primary); }
+.znb-seg-btn:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: -2px; }
+.znb-seg-on { background: var(--dsw-alias-bg-layer-2); color: var(--dsw-alias-label-primary); font-weight: 500; }
+.znb-config-preview { flex: 1; min-height: 0; overflow-y: auto; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; padding: 12px 14px; background: var(--dsw-alias-bg-layer-1); }
 .znb-editor { flex: 1; min-height: 0; padding: 10px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; resize: none; }
 .znb-editor:focus { border-color: var(--dsw-alias-state-business-primary); }
 .znb-wip { display: flex; flex: 1; align-items: center; justify-content: center; }

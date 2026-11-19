@@ -11,3 +11,4 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-client-ui-theme@0.2.2-rc.5'
   - '@deepseek-ai/dsh-timeout@0.2.2-rc.5'
   - '@deepseek-ai/dsh-typert-protocol@0.2.2-rc.5'
+  - '@deepseek-ai/dsh-client-ui-primitives@0.2.2-rc.5'
