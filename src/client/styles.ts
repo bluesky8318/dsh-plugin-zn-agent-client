@@ -838,6 +838,10 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 /* CLI 视图工具条：粘贴恢复命令输入框 */
 .znac-view-resumein { width: 220px; padding: 4px 9px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
 .znac-view-resumein:focus { border-color: var(--dsw-alias-state-business-primary); }
+/* 看板内嵌会话预览：原生 conversation.content 只读嵌入（隐藏 composer，纯浏览） */
+.znb-chat-embed { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
+.znb-chat-embed > :first-child { flex: 1; min-height: 0; }
+.znb-chat-embed [data-composer-seat] { display: none !important; }
 `
 
 /** 注入本插件的样式节点；返回清理函数，插件停用时移除样式。 */

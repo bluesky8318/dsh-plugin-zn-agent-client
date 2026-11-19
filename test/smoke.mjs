@@ -97,8 +97,7 @@ assert.ok(registeredCommands.some(c => c.name === 'znacp'), '/znacp command shou
 assert.ok(registeredRoutes.includes('/api/zn-agent-client/sessions'), '/sessions route should be registered')
 assert.ok(registeredRoutes.includes('/api/zn-agent-client/workspace-config'), '/workspace-config route should be registered')
 assert.ok(registeredRoutes.includes('/api/zn-agent-client/cli-session-detail'), '/cli-session-detail route should be registered')
-assert.ok(registeredRoutes.includes('/api/zn-agent-client/dsh-session-detail'), '/dsh-session-detail route should be registered')
-assert.equal(registeredRoutes.length, 9, 'six CLI routes + three workspace routes expected')
+assert.equal(registeredRoutes.length, 8, 'six CLI routes + two workspace routes expected (DSH preview renders client-side)')
 assert.ok(emitted.some(e => e.event === 'zn-agent-client/ready'), 'ready event should be emitted')
 
 // list_acp_agents 直接执行即可（不 spawn 进程）。

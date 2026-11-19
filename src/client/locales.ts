@@ -54,6 +54,7 @@ export type ZnAgentClientLocaleKey =
   | 'board.detailHint' | 'board.detailFailed' | 'board.openChat'
   | 'board.copyResume' | 'board.copyOk' | 'board.copyFailed'
   | 'board.previewUnsupported' | 'board.previewEmpty' | 'board.roleUser' | 'board.roleAssistant'
+  | 'board.previewFailed'
   | 'board.configMissing' | 'board.configSave' | 'board.configSaved' | 'board.configSaveFailed' | 'board.configLoadFailed'
   | 'board.analysisWip'
 
@@ -165,6 +166,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'board.copyFailed': 'Copy failed',
   'board.previewUnsupported': 'Preview is not supported for this agent yet',
   'board.previewEmpty': 'No messages to show',
+  'board.previewFailed': 'Preview is unavailable in this host version',
   'board.roleUser': 'User',
   'board.roleAssistant': 'Assistant',
   'board.configMissing': 'No AGENTS.md in this workspace yet; saving will create it',
@@ -289,6 +291,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'board.copyFailed': '复制失败',
   'board.previewUnsupported': '该 agent 的会话暂不支持内容预览',
   'board.previewEmpty': '没有可显示的消息',
+  'board.previewFailed': '当前宿主版本暂不支持会话预览',
   'board.roleUser': '用户',
   'board.roleAssistant': '助手',
   'board.configMissing': '工作区还没有 AGENTS.md，保存后将创建',

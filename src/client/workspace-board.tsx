@@ -3,7 +3,9 @@
  * （contextMenus 的 workspace 目标贡献，排在第一位），看板跟随该工作区。
  *
  * 布局：顶部工作区名 + 四个页签：
- * - DSH 会话：会话列表（搜索/排序/状态筛选），点击跳转会话窗口。
+ * - DSH 会话：会话列表（搜索/排序/状态筛选），点击行 → 右侧**原生会话预览**
+ *   （SessionProvider + conversation.content 工厂槽位，宿主自己渲染，零日志
+ *   解析、零文件读取；composer 经容器内 CSS 隐藏保证只读），行尾「打开」跳转。
  * - CLI 会话：agent 下拉 + 平铺表格（搜索/排序），点击行 → 右侧人话预览
  *   （transcript 只读解析，见 acp/cli-transcript.ts）+ 复制恢复命令。
  *   故意不提供「恢复到 CLI 视图」入口（CLI 会话关联不上 DSH 会话）；
@@ -11,7 +13,7 @@
  * - 工作区配置：AGENTS.md 查看/编辑/创建（workspaceId → 宿主解析路径）。
  * - 工作区分析：占位（建设中）。
  *
- * 动作只用授权 API：openSession / connectWorkspace / archiveSession。
+ * 动作只用授权 API：openSession / connectWorkspace / archiveSession / sessions.retain。
  * 不写任何 DSH 会话日志、不改侧栏结构（699ebb 教训：会话日志是宿主私有格式）。
  * @module dsh-plugin-zn-agent-client/client/workspace-board
  */
@@ -77,6 +79,10 @@ interface BoardPageProps {
   readonly useWorkspaces: BoardHook<BoardWorkspaceSnapshot>
   /** 配置快照源（controller.inject().hooks.templateConfig，经 useSyncExternalStore 读）。 */
   readonly templateConfig: ConfigSource
+  /** 声明 children（非 root 作用域）后 kit 注入：会话区域渲染器。 */
+  readonly SessionProvider: (props: { readonly session?: unknown; readonly children?: React.ReactNode }) => React.ReactNode
+  /** 渲染私有子槽位（znacp.boardChat 的占位解析入口）。 */
+  readonly renderSlot: (key: 'znacp.boardChat', owner: Record<string, never>) => React.ReactNode
 }
 
 /** 宿主 uiWorkspace 服务面（结构化子集，运行时来自 dsh-client-ui-workspace）。 */
@@ -109,10 +115,19 @@ interface ZnContextMenus {
   }): () => void
 }
 
+/** 宿主 sessions 服务面（结构化子集；retain 是被动绑定，不会唤醒 agent）。 */
+interface ZnSessions {
+  retain(
+    sessionId: string,
+    options: { readonly source: string },
+  ): { release(): void }
+}
+
 /** registerWorkspaceBoard 捕获的服务（旧宿主缺失时为 null，动作降级禁用）。 */
 let uiWorkspace: ZnUiWorkspace | null = null
 let layout: ZnLayout | null = null
 let contextMenus: ZnContextMenus | null = null
+let sessionsFace: ZnSessions | null = null
 
 /** 看板聚焦状态：工作区菜单「打开看板」动作携带的工作区（seq 保证同值也能触发订阅）。 */
 let focusState: { readonly wsId: string; readonly seq: number } | null = null
@@ -153,14 +168,16 @@ function BoardMenuIcon(): React.ReactElement {
  */
 export function registerWorkspaceBoard(ctx: Context, controller: { inject(): TemplateFace }): void {
   const tBind = ctx.locale.bind(LOCALE_NAMESPACE)
-  // 声明依赖宿主的 uiWorkspace / layout / contextMenus 服务（授权 API：开/建/归档会话、切主区面板、菜单贡献）。
+  // 声明依赖宿主的 uiWorkspace / layout / contextMenus / sessions 服务
+  // （授权 API：开/建/归档会话、切主区面板、菜单贡献、retain 会话引用做只读预览）。
   // 注意：inject 回调在服务可用时才执行——菜单贡献必须在这里注册，
   // 不能放在外层同步判断（服务未捕获时 contextMenus 还是 null）。
-  ctx.inject(['uiWorkspace', 'layout', 'contextMenus'], (scope: Context) => {
+  ctx.inject(['uiWorkspace', 'layout', 'contextMenus', 'sessions'], (scope: Context) => {
     const raw = scope as unknown as { get?(key: string): unknown }
     uiWorkspace = (raw.get?.('uiWorkspace') ?? null) as ZnUiWorkspace | null
     layout = (raw.get?.('layout') ?? null) as ZnLayout | null
     contextMenus = (raw.get?.('contextMenus') ?? null) as ZnContextMenus | null
+    sessionsFace = (raw.get?.('sessions') ?? null) as ZnSessions | null
     // 工作区菜单贡献（ui-workspace 自带的 重命名/删除 就是同一注册表注册的，
     // target:'workspace'；effect 返回注销函数，插件卸载时宿主自动调用）。
     // order:10 排在第一位（rename=100/delete=300），菜单首项不带分隔线。
@@ -186,21 +203,33 @@ export function registerWorkspaceBoard(ctx: Context, controller: { inject(): Tem
   // 该槽位的类型声明在未安装的 context-menu 包里 → 走窄化调用签名。
   const slotsAny = ctx.slots as unknown as {
     inject(name: string, setup: () => unknown): unknown
-    register(options: { readonly name: string; readonly key: string }, occupant: (props: unknown) => React.ReactNode): () => void
+    register(options: Record<string, unknown>, occupant: (props: unknown) => React.ReactNode): () => void
   }
   slotsAny.inject('contextMenu.icon', () => slotsAny.register({ name: 'contextMenu.icon', key: 'znacp.board' }, BoardMenuIcon))
   // main 面板的 register 选项没有 inject 舱位 → 配置 hooks 舱位在注册时直接
   // 取面（controller.inject() 只是构造 hooks，不依赖挂载时机）。
+  // children 声明 session 作用域子槽位 → 面板 props 获得 SessionProvider + renderSlot
+  // （dsh-board 同款，运行时已验证；框架类型对 children 占位组件有编译期约束，
+  // 我们的手写 props 走窄化签名注册）。
   const face = controller.inject()
-  ctx.slots.inject('main', () => ctx.slots.register({
+  slotsAny.inject('main', () => slotsAny.register({
     name: 'main',
     key: BOARD_PANEL_ID,
     locale: LOCALE_NAMESPACE,
+    children: { 'znacp.boardChat': { kind: 'single', scope: 'session' } },
   }, (props: unknown) => (
     <WorkspaceBoardPage
       {...(props as unknown as Omit<BoardPageProps, 'templateConfig'>)}
       templateConfig={face.hooks.templateConfig}
     />
+  )))
+  // 私有子槽位占位：会话作用域的 kit 注入 useSession + renderFactorySlot（dsh-board 同款）。
+  slotsAny.inject('znacp.boardChat', () => slotsAny.register({
+    name: 'znacp.boardChat',
+    id: 'znacp-board-chat',
+    locale: LOCALE_NAMESPACE,
+  }, (props: unknown) => (
+    <BoardChatBody {...(props as unknown as BoardChatBodyProps)} />
   )))
 }
 
@@ -256,6 +285,59 @@ async function postBoard<T>(path: string, body: Record<string, unknown>): Promis
   })
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return await response.json() as T
+}
+
+/** znacp.boardChat 占位的运行时 props（session 作用域 kit：useSession + renderFactorySlot）。 */
+interface BoardChatBodyProps {
+  readonly t: (key: string) => string
+  readonly useSession: BoardHook<{ readonly blank?: boolean; readonly openState?: string }>
+  readonly renderFactorySlot: (
+    key: 'conversation.content',
+    props: { readonly variant: 'embedded'; readonly phase: 'settling' | 'hero' | 'active'; readonly hero: boolean },
+  ) => React.ReactNode
+}
+
+/**
+ * 会话预览的原生会话体：交给宿主自带的 conversation.content 渲染
+ * （宿主自己读自己的会话，插件零日志解析、零文件读取）。
+ */
+function BoardChatBody(props: BoardChatBodyProps): React.ReactElement {
+  const session = props.useSession((value) => value)
+  const phase = session?.blank ? (session.openState === 'loading' ? 'settling' : 'hero') : 'active'
+  return (
+    <div className="znb-chat-embed">
+      {props.renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero: phase === 'hero' })}
+    </div>
+  )
+}
+
+/**
+ * DSH 会话只读预览：retain 会话引用（被动绑定，不唤醒 agent）→ SessionProvider
+ * 定位该会话 → 渲染 znacp.boardChat 占位（原生会话体）。
+ */
+function ChatSessionPreview(props: {
+  readonly sessionId: string
+  readonly sessionFace: ZnSessions | null
+  readonly SessionProvider: BoardPageProps['SessionProvider']
+  readonly renderSlot: BoardPageProps['renderSlot']
+  readonly t: (key: string) => string
+}): React.ReactElement {
+  const reference = useMemo(() => {
+    if (props.sessionFace === null) return null
+    try {
+      return props.sessionFace.retain(props.sessionId, { source: 'znacp-board' })
+    } catch {
+      return null
+    }
+  }, [props.sessionFace, props.sessionId])
+  useEffect(() => () => { reference?.release() }, [reference])
+  if (reference === null) return <p className="znb-empty">{props.t('board.previewFailed')}</p>
+  const Provider = props.SessionProvider
+  return (
+    <Provider session={reference} key={props.sessionId}>
+      {props.renderSlot('znacp.boardChat', {})}
+    </Provider>
+  )
 }
 
 /**
@@ -335,36 +417,13 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
   const wsId = ws?.workspaceId ?? ''
   const activeCliAgent = agents.find((agent: AgentEntry) => agent.id === cliAgentId) ?? agents[0] ?? null
 
-  // ── DSH 会话预览（点击行 → 右侧内容预览；跳转走行尾显式按钮）────
+  // ── DSH 会话预览（点击行 → 右侧原生会话预览；跳转走行尾显式按钮）────
   const [chatDetailId, setChatDetailId] = useState<string>('')
-  const [chatDetail, setChatDetail] = useState<{ supported: boolean; messages: Array<{ role: 'user' | 'assistant'; text: string }>; truncated: boolean } | null>(null)
-  const [chatDetailLoading, setChatDetailLoading] = useState(false)
 
   // 切换工作区后预览失效（会话属于上一个工作区）。
   useEffect(() => {
     setChatDetailId('')
-    setChatDetail(null)
   }, [wsId])
-
-  useEffect(() => {
-    if (chatDetailId === '') return
-    let alive = true
-    setChatDetailLoading(true)
-    setChatDetail(null)
-    void postBoard<{ supported: boolean; messages: Array<{ role: 'user' | 'assistant'; text: string }>; truncated: boolean }>(
-      '/api/zn-agent-client/dsh-session-detail',
-      { sessionId: chatDetailId },
-    ).then((data) => {
-      if (!alive) return
-      setChatDetail(data)
-      setChatDetailLoading(false)
-    }).catch(() => {
-      if (!alive) return
-      setChatDetailLoading(false)
-      showToast(t('board.detailFailed'))
-    })
-    return () => { alive = false }
-  }, [chatDetailId, t])
 
   useEffect(() => {
     if (tab !== 'cli' || wsPath === '' || activeCliAgent === null) return
@@ -548,25 +607,21 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
             </div>
             <div className="znb-clidetail">
               {chatDetailId === '' && <p className="znb-empty">{t('board.detailHint')}</p>}
-              {chatDetailId !== '' && chatDetailLoading && <p className="znb-empty">{t('board.cliLoading')}</p>}
-              {chatDetailId !== '' && !chatDetailLoading && chatDetail !== null && (
+              {chatDetailId !== '' && (
                 <>
                   <div className="znb-detail-bar">
-                    <span className="znb-detail-id">{chatDetailId.slice(0, 8)}</span>
-                    <span className="znb-detail-count">{chatDetail.messages.length}{chatDetail.truncated ? '+' : ''}</span>
+                    <span className="znb-detail-id">{chatRows.find((row) => row.id === chatDetailId)?.title ?? chatDetailId.slice(0, 8)}</span>
                     <button type="button" className="znb-copybtn" onClick={() => { openChatSession(chatDetailId) }}>
                       {t('board.openChat')}
                     </button>
                   </div>
-                  {chatDetail.messages.length === 0 && <p className="znb-empty">{t('board.previewEmpty')}</p>}
-                  <div className="znb-msgs">
-                    {chatDetail.messages.map((message, index) => (
-                      <div key={`${chatDetailId}:${index}`} className={`znb-msg znb-msg-${message.role}`}>
-                        <span className="znb-msg-role">{message.role === 'user' ? t('board.roleUser') : t('board.roleAssistant')}</span>
-                        <p className="znb-msg-text">{message.text}</p>
-                      </div>
-                    ))}
-                  </div>
+                  <ChatSessionPreview
+                    sessionId={chatDetailId}
+                    sessionFace={sessionsFace}
+                    SessionProvider={props.SessionProvider}
+                    renderSlot={props.renderSlot}
+                    t={t}
+                  />
                 </>
               )}
             </div>
