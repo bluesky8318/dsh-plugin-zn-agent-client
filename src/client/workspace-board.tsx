@@ -304,12 +304,36 @@ interface BoardChatBodyProps {
 /**
  * 会话预览的原生会话体：交给宿主自带的 conversation.content 渲染
  * （宿主自己读自己的会话，插件零日志解析、零文件读取）。
+ * 挂载后把宿主滚动容器钉到底部——预览要看到的是会话的最新消息。
  */
 function BoardChatBody(props: BoardChatBodyProps): React.ReactElement {
   const session = props.useSession((value) => value)
   const phase = session?.blank ? (session.openState === 'loading' ? 'settling' : 'hero') : 'active'
+  const embedRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (phase !== 'active') return
+    // 虚拟列表是增量向上加载的，前几帧 scrollHeight 还在长；短轮询钉底，
+    // 高度稳定两轮即停（之后不再和用户向上滚动抢位置）。
+    let round = 0
+    let stable = 0
+    let lastHeight = -1
+    const timer = window.setInterval(() => {
+      const scroller = embedRef.current?.querySelector<HTMLElement>('[data-conversation-scroll]')
+      if (scroller == null) return
+      if (scroller.scrollHeight !== lastHeight) {
+        lastHeight = scroller.scrollHeight
+        stable = 0
+        scroller.scrollTop = scroller.scrollHeight
+      } else {
+        stable += 1
+      }
+      round += 1
+      if (round >= 20 || stable >= 3) window.clearInterval(timer)
+    }, 150)
+    return () => { window.clearInterval(timer) }
+  }, [phase])
   return (
-    <div className="znb-chat-embed">
+    <div className="znb-chat-embed" ref={embedRef}>
       {props.renderFactorySlot('conversation.content', { variant: 'embedded', phase, hero: phase === 'hero' })}
     </div>
   )
@@ -417,6 +441,11 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
   const [detail, setDetail] = useState<CliDetail | null>(null)
   const [detailId, setDetailId] = useState<string>('')
   const [detailLoading, setDetailLoading] = useState(false)
+  // 预览定位到最底部：CLI 会话的最新消息在文件末尾。
+  const msgsRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    if (msgsRef.current !== null) msgsRef.current.scrollTop = msgsRef.current.scrollHeight
+  }, [detail])
   const wsPath = ws?.path ?? ''
   const wsId = ws?.workspaceId ?? ''
   const activeCliAgent = agents.find((agent: AgentEntry) => agent.id === cliAgentId) ?? agents[0] ?? null
@@ -693,11 +722,17 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
                     </div>
                     {!detail.supported && <p className="znb-empty">{t('board.previewUnsupported')}</p>}
                     {detail.supported && detail.messages.length === 0 && <p className="znb-empty">{t('board.previewEmpty')}</p>}
-                    <div className="znb-msgs">
+                    <div className="znb-msgs" ref={msgsRef}>
                       {detail.messages.map((message, index) => (
                         <div key={`${detailId}:${index}`} className={`znb-msg znb-msg-${message.role}`}>
                           <span className="znb-msg-role">{message.role === 'user' ? t('board.roleUser') : t('board.roleAssistant')}</span>
-                          <p className="znb-msg-text">{message.text}</p>
+                          {message.role === 'assistant' ? (
+                            <div className="znb-msg-md">
+                              <MarkdownText text={message.text} labels={mdLabels} variant="compact" />
+                            </div>
+                          ) : (
+                            <p className="znb-msg-text">{message.text}</p>
+                          )}
                         </div>
                       ))}
                     </div>

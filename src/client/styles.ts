@@ -828,6 +828,8 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-msg-assistant { background: transparent; border-left: 2px solid var(--dsw-alias-state-business-primary); }
 .znb-msg-role { display: block; margin-bottom: 2px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
 .znb-msg-text { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); white-space: pre-wrap; word-break: break-word; }
+.znb-msg-md { min-width: 0; overflow-wrap: break-word; color: var(--dsw-alias-label-primary); }
+.znb-msg-md table { max-width: 100%; display: block; overflow-x: auto; }
 .znb-config { display: flex; flex-direction: column; flex: 1; min-height: 0; padding: 10px 14px; }
 .znb-config-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
 .znb-config-path { flex: 1; min-width: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
