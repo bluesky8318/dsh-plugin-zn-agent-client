@@ -7,9 +7,30 @@ English | [中文](CHANGELOG.zh.md)
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-19
+
 ### Added
 
+- **Workspace board** — workspace-menu entry with DSH sessions, CLI sessions, workspace configuration, and a reserved analysis tab; follows the selected workspace.
+- **Native DSH conversation preview** — read-only host rendering through `SessionProvider`, with an explicit button to open the session, history pagination, and latest-message positioning.
+- **CLI history preview and resume** — supported transcript previews with Markdown assistant replies, resume-command copying, external-terminal launch, and paste-to-resume in the CLI Agent view.
+- **Workspace `AGENTS.md` editor** — view, create, edit, and preview Markdown from the board.
+- **Handoff DSH** — preview a DSH session snapshot and send it as the initial prompt of a fresh CLI session; extractive summaries include goals, todos, and recent messages; Kimi uses a create-and-resume flow.
+- **Optional LLM handoff summary** — configurable OpenAI-compatible gateway, model, API-key environment-variable name, system prompt, and handoff instructions; explicit cost/time confirmation before each request and extractive fallback on failure.
 - **Per-session CLI instances** — every DSH session gets its own CLI agent instance (PTY key `DSH-session:agent`); switching sessions restores that session's live terminal (the PTY stays alive host-side).
+
+### Changed
+
+- Settings are grouped into three initially collapsed sections: ACP + CLI, workspace project configuration, and CLI Agent view. Handoff defaults are displayed directly in the form.
+- Default handoff instructions ask the receiving agent to list unfinished work and confirm which tasks to continue.
+- Declared DSH compatibility as `>=0.2.2-rc.3` and updated client development dependencies to `0.2.2-rc.5` (locale remains `0.1.7-rc.2`).
+- Expanded both READMEs with board and handoff usage, requirements, configuration defaults, and credential-handling guidance.
+
+### Fixed
+
+- Handoff preview no longer dismisses on focus loss, backdrop clicks, or Escape; explicit close/cancel controls are required.
+- Narrow CLI toolbars wrap rather than crushing the agent selector; the resume input uses flexible sizing.
+- Bounded board preview height restores scrolling and pagination; workspace-menu registration and workspace-registry injection are wired to the host lifecycle.
 
 ### Removed
 
