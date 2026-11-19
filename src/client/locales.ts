@@ -23,6 +23,7 @@ export type ZnAgentClientLocaleKey =
   | 'field.defaultAgent.label' | 'field.defaultAgent.hint'
   | 'field.autoAllow.label' | 'field.autoAllow.hint'
   | 'field.logEvents.label' | 'field.logEvents.hint'
+  | 'field.handoffLlm.label' | 'field.handoffLlm.hint'
   // agent picker 浮层
   | 'launcher.title' | 'launcher.close' | 'launcher.empty' | 'launcher.hint'
   | 'launcher.copy' | 'launcher.copied' | 'launcher.settings' | 'launcher.settingsHint'
@@ -37,6 +38,9 @@ export type ZnAgentClientLocaleKey =
   | 'view.historyLoading' | 'view.historyFailed' | 'view.historyEmpty'
   | 'view.labelAttach' | 'view.labelNew' | 'view.labelResume' | 'view.labelContinue'
   | 'view.resumePasteHint' | 'view.resumeInvalid'
+  | 'view.handoff' | 'view.handoffTitle' | 'view.handoffPreparing' | 'view.handoffFailed' | 'view.handoffRetry'
+  | 'view.handoffLaunch' | 'view.handoffCancel' | 'view.handoffModeExtract' | 'view.handoffModeLlm'
+  | 'view.handoffLlmFallback' | 'view.handoffRegenLlm' | 'view.handoffRegenExtract'
   | 'view.agentPicker'
   | 'view.idleHint' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
@@ -96,6 +100,8 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'field.autoAllow.hint': 'Automatically approve the agent\u2019s tool-permission requests.',
   'field.logEvents.label': 'Diagnostic logging',
   'field.logEvents.hint': 'Log process lifecycle and stderr summaries to the host console.',
+  'field.handoffLlm.label': 'Handoff uses local LLM',
+  'field.handoffLlm.hint': 'Handoff DSH summarizes the session via the local LLM gateway before preview; falls back to the extractive template on failure.',
   'launcher.title': 'ACP agents',
   'launcher.close': 'Close',
   'launcher.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
@@ -131,6 +137,18 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelContinue': 'Continued',
   'view.resumePasteHint': 'Paste a resume command and press Enter',
   'view.resumeInvalid': 'No session id found in that command',
+  'view.handoff': 'Handoff DSH',
+  'view.handoffTitle': 'Handoff DSH preview',
+  'view.handoffPreparing': 'Preparing the handoff document from this session…',
+  'view.handoffFailed': 'Failed to prepare the handoff document.',
+  'view.handoffRetry': 'Retry',
+  'view.handoffLaunch': 'Start CLI with handoff',
+  'view.handoffCancel': 'Close',
+  'view.handoffModeExtract': 'Extractive',
+  'view.handoffModeLlm': 'LLM summary',
+  'view.handoffLlmFallback': 'LLM failed, extractive fallback',
+  'view.handoffRegenLlm': 'Summarize with LLM',
+  'view.handoffRegenExtract': 'Regenerate extractive',
   'view.agentPicker': '选择 CLI agent',
   'view.sessionLabel': '会话',
   'view.currentSession': '当前会话',
@@ -221,6 +239,8 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'field.autoAllow.hint': '自动批准 agent 的工具权限请求,不再逐条确认。',
   'field.logEvents.label': '诊断日志',
   'field.logEvents.hint': '把进程生命周期与 stderr 摘要输出到宿主控制台。',
+  'field.handoffLlm.label': 'Handoff 用本地大模型摘要',
+  'field.handoffLlm.hint': '开启后 Handoff DSH 先经本地 LLM 网关压缩对话再预览；失败自动回落提取式模板。',
   'launcher.title': 'ACP 智能体',
   'launcher.close': '关闭',
   'launcher.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
@@ -256,6 +276,18 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelContinue': '已继续',
   'view.resumePasteHint': '粘贴恢复命令，回车执行',
   'view.resumeInvalid': '没认出恢复命令里的会话 id',
+  'view.handoff': 'Handoff DSH',
+  'view.handoffTitle': 'Handoff DSH 预览',
+  'view.handoffPreparing': '正在读取会话上下文，生成交接文档…',
+  'view.handoffFailed': '交接文档生成失败。',
+  'view.handoffRetry': '重试',
+  'view.handoffLaunch': '带交接文档启动 CLI',
+  'view.handoffCancel': '关闭',
+  'view.handoffModeExtract': '提取式',
+  'view.handoffModeLlm': 'LLM 摘要',
+  'view.handoffLlmFallback': 'LLM 失败，已回落提取式',
+  'view.handoffRegenLlm': '用 LLM 重新摘要',
+  'view.handoffRegenExtract': '重新生成提取式',
   'view.externalOpen': '在外部终端打开',
   'view.agentPicker': '选择 CLI agent',
   'view.sessionLabel': '会话',

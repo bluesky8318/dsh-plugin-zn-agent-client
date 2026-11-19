@@ -41,6 +41,8 @@ export interface Config {
   autoAllowPermissions: Volatile<boolean>
   /** 输出诊断日志（进程生命周期、stderr 摘要等）。 */
   logEvents: Volatile<boolean>
+  /** Handoff DSH 默认用本地 LLM 网关压缩对话（失败自动回落提取式）。 */
+  handoffLlm: Volatile<boolean>
 }
 
 /** /znacp 斜杠命令名（/acp 被其他插件占用）。 */
@@ -72,6 +74,7 @@ export const Config: Schema<any> = Schema.object({
   defaultAgent: Schema.string().default('').volatile(),
   autoAllowPermissions: Schema.boolean().default(false).volatile(),
   logEvents: Schema.boolean().default(false).volatile(),
+  handoffLlm: Schema.boolean().default(false).volatile(),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -233,10 +236,15 @@ export function apply(ctx: Context, config: Config): void {
       registerRoute(route)
     }
     // 看板路由：AGENTS.md 读写（workspaceId → 宿主注册表解析根目录，客户端不传路径）
-    // + CLI 会话内容预览/恢复命令。
+    // + CLI 会话内容预览/恢复命令 + Handoff DSH 交接文档（只读会话 face）。
     for (const route of createWorkspaceRoutes({
       resolveAgent: (agentId: string) => resolveAgentConfig(agentId) ?? undefined,
       resolveWorkspacePath: async (workspaceId: string) => hostCtx.workspaceRegistry?.get?.(workspaceId)?.path ?? null,
+      getSession: (sessionId: string) => hostCtx.sessions?.get?.(sessionId),
+      resolveSessionCwd: (sessionId: string) => {
+        const session = hostCtx.sessions?.get?.(sessionId)
+        return session === undefined ? undefined : cwdFace?.get(session)
+      },
     })) {
       registerRoute(route)
     }

@@ -22,6 +22,8 @@ export const VERIFIED_TOKENS: ReadonlySet<string> = new Set([
   '--dsw-alias-bg-base',
   '--dsw-alias-bg-layer-1',
   '--dsw-alias-bg-layer-2',
+  // 遮罩（Handoff 弹层 backdrop；design-platform.css 亮/暗两版都有）
+  '--dsw-alias-bg-mask-1',
   // 描边
   '--dsw-alias-border-l1',
   '--dsw-alias-border-l4',

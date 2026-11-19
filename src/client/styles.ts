@@ -847,6 +847,17 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 /* CLI 视图工具条：粘贴恢复命令输入框 */
 .znac-view-resumein { width: 220px; padding: 4px 9px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
 .znac-view-resumein:focus { border-color: var(--dsw-alias-state-business-primary); }
+/* ---- Handoff DSH 预览弹层：遮罩 + 卡片 + 文档 ---- */
+.znac-ho-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-bg-mask-1); }
+.znac-ho-card { display: flex; flex-direction: column; box-sizing: border-box; width: min(640px, calc(100vw - 48px)); max-height: 80vh; padding: 12px 14px; border: 0; border-radius: var(--dsw-radius-lg); background: var(--dsw-alias-bg-layer-1); box-shadow: var(--dsw-elevation-prominent); }
+.znac-ho-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.znac-ho-title { font-size: 14px; line-height: 20px; font-weight: 500; color: var(--dsw-alias-label-primary); }
+.znac-ho-meta { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+.znac-ho-close { margin-left: auto; padding: 2px 8px; border: 0; border-radius: 6px; background: transparent; font-size: 14px; line-height: 20px; color: var(--dsw-alias-label-secondary); cursor: pointer; }
+.znac-ho-close:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.znac-ho-note { margin: 8px 0; font-size: 13px; line-height: 19px; color: var(--dsw-alias-label-secondary); }
+.znac-ho-doc { flex: 1; min-height: 0; margin: 0; padding: 10px 12px; overflow: auto; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; background: var(--dsw-alias-bg-layer-2); font-size: 12px; line-height: 19px; white-space: pre-wrap; word-break: break-word; color: var(--dsw-alias-label-primary); }
+.znac-ho-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
 /* 看板内嵌会话预览：原生 conversation.content 只读嵌入（隐藏 composer，纯浏览） */
 .znb-chat-embed { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 .znb-chat-embed > :first-child { flex: 1; min-height: 0; }

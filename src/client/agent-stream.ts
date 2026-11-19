@@ -21,7 +21,8 @@ const STREAM_URL = '/api/zn-agent-client/stream'
 const INPUT_URL = '/api/zn-agent-client/input'
 const STATE_URL = '/api/zn-agent-client/state'
 const SESSIONS_URL = '/api/zn-agent-client/sessions'
-const GUARD = { 'x-zn-agent-client': '1', 'content-type': 'application/json' } as const
+/** 插件路由防误触头（视图内其他 fetch 也复用）。 */
+export const GUARD = { 'x-zn-agent-client': '1', 'content-type': 'application/json' } as const
 
 /** 历史会话条目（宿主 cli-sessions.ts 的 CliSessionEntry 同构）。 */
 export interface CliSessionEntry {
@@ -33,9 +34,9 @@ export interface CliSessionEntry {
   readonly cwd?: string
 }
 
-/** 会话动作（新会话/继续最近/还原指定会话）。 */
+/** 会话动作（新会话/继续最近/还原指定会话；new 可带 Handoff 交接首条 prompt）。 */
 export type SessionAction =
-  | { readonly mode: 'new' }
+  | { readonly mode: 'new'; readonly initialPrompt?: string }
   | { readonly mode: 'continue' }
   | { readonly mode: 'resume'; readonly resumeTarget: string; readonly cwd?: string }
 
@@ -293,6 +294,8 @@ export class AgentTerminalSession {
     mode?: 'attach' | 'new' | 'continue' | 'resume'
     resumeTarget?: string
     cwd?: string
+    /** Handoff DSH 交接文档全文（mode='new' 时注入首条 prompt）。 */
+    initialPrompt?: string
   } = {}): Promise<void> {
     if (this.disposed) return
     const dims = this.currentDimensions()
@@ -310,6 +313,9 @@ export class AgentTerminalSession {
           mode: options.mode,
           resumeTarget: options.resumeTarget,
           ...(options.cwd !== undefined && options.cwd !== '' ? { cwd: options.cwd } : {}),
+          ...(options.initialPrompt !== undefined && options.initialPrompt.trim() !== ''
+            ? { initialPrompt: options.initialPrompt }
+            : {}),
         }),
       })
       if (!opened.ok) {
@@ -334,7 +340,11 @@ export class AgentTerminalSession {
     await this.connect(
       action.mode === 'resume'
         ? { restart: true, mode: 'resume', resumeTarget: action.resumeTarget, ...(action.cwd !== undefined ? { cwd: action.cwd } : {}) }
-        : { restart: true, mode: action.mode },
+        : {
+            restart: true,
+            mode: action.mode,
+            ...(action.mode === 'new' && action.initialPrompt !== undefined ? { initialPrompt: action.initialPrompt } : {}),
+          },
     )
   }
 

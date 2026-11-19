@@ -20,6 +20,7 @@ import {
   type TerminalStatus,
 } from './cli-terminal.ts'
 import { buildLaunchPlan, listAgentSessions, resolveSessionWorktree, type SessionMode } from './cli-sessions.ts'
+import { buildHandoffLaunchLine } from './cli-handoff.ts'
 
 /** 插件路由防误触头（照参考插件的静态头约定）。 */
 export const GUARD_HEADER = 'x-zn-agent-client'
@@ -161,6 +162,12 @@ export function createCliTerminalRoutes(controller: CliTerminalController, optio
         resume: body.resume === true,
         mode: plan.mode,
         ...(plan.launchLine !== undefined ? { launchLine: plan.launchLine } : {}),
+        // Handoff DSH：客户端带 initialPrompt（交接文档全文）时改走交接
+        // 启动命令行（base64 传文档、按 CLI 形态注入首条 prompt），
+        // 覆盖 buildLaunchPlan 的常规启动行；模式保持 new。
+        ...(typeof body.initialPrompt === 'string' && body.initialPrompt.trim() !== ''
+          ? { launchLine: buildHandoffLaunchLine(agent, body.initialPrompt) }
+          : {}),
       })
       return void json(res, 200, ok({
         info: term.status,

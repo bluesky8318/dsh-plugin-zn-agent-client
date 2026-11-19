@@ -47,6 +47,7 @@ interface Draft {
   defaultAgent: string
   autoAllow: boolean
   logEvents: boolean
+  handoffLlm: boolean
 }
 
 /** 草稿行的 key 自增源（仅用于 React 列表稳定键）。 */
@@ -121,6 +122,7 @@ function readDraft(value: Record<string, unknown>): Draft {
     defaultAgent: typeof value.defaultAgent === 'string' ? value.defaultAgent : '',
     autoAllow: value.autoAllowPermissions === true,
     logEvents: value.logEvents === true,
+    handoffLlm: value.handoffLlm === true,
   }
 }
 
@@ -213,6 +215,9 @@ export function buildOps(
   }
   if (draft.logEvents !== accepted.logEvents) {
     ops.push({ op: 'set', path: ['logEvents'], value: draft.logEvents })
+  }
+  if (draft.handoffLlm !== accepted.handoffLlm) {
+    ops.push({ op: 'set', path: ['handoffLlm'], value: draft.handoffLlm })
   }
   return ops
 }
@@ -447,6 +452,21 @@ function SettingsForm(
         </div>
       </div>
 
+      <div className="znac-field znac-field-inline">
+        <input
+          id="znac-handoff-llm"
+          type="checkbox"
+          checked={draft.handoffLlm}
+          disabled={!editable}
+          aria-describedby="znac-handoff-llm-hint"
+          onChange={(event) => { setDraft({ ...draft, handoffLlm: event.currentTarget.checked }) }}
+        />
+        <div>
+          <label htmlFor="znac-handoff-llm">{t('field.handoffLlm.label')}</label>
+          <span className="znac-field-hint" id="znac-handoff-llm-hint">{t('field.handoffLlm.hint')}</span>
+        </div>
+      </div>
+
       {!snapshot.writable && <p className="znac-note">{t('card.readOnly')}</p>}
       {failed && <p className="znac-invalid" role="alert">{t('card.saveFailed')}</p>}
       {envInvalid && <p className="znac-invalid" role="alert">{t('field.agent.invalidEnv')}</p>}
@@ -479,5 +499,6 @@ function draftToComparable(draft: Draft): unknown {
     defaultAgent: draft.defaultAgent,
     autoAllow: draft.autoAllow,
     logEvents: draft.logEvents,
+    handoffLlm: draft.handoffLlm,
   }
 }

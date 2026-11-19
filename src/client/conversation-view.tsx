@@ -13,7 +13,7 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { Context } from '@deepseek-ai/cordis'
 import type { ConfigFormController, ConfigSnapshot } from './config-form.ts'
-import { acquireSession, fetchStates, listSessions, type AgentTerminalSession, type CliSessionEntry } from './agent-stream.ts'
+import { acquireSession, fetchStates, listSessions, GUARD, type AgentTerminalSession, type CliSessionEntry } from './agent-stream.ts'
 import { readAgents } from './shell-overlay.tsx'
 import type { AgentEntry } from './shell-overlay.tsx'
 import type { TemplateFace } from './shell-overlay.tsx'
@@ -70,6 +70,8 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
   const { t, useTemplateConfig, sessionId } = props
   // 注入面的 hooks 舱位以 use<Name> 选择器钩子到达（见 InjectFace 契约）。
   const agents = useTemplateConfig((state: ConfigSnapshot) => readAgents(state.value))
+  // Handoff DSH：设置页开关（默认提取式；开启后准备阶段先走本地 LLM 网关压缩）。
+  const handoffLlm = useTemplateConfig((state: ConfigSnapshot) => state.value.handoffLlm === true)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const targets = useMemo<TermTarget[]>(() => agents.map((agent: AgentEntry) => ({
@@ -93,13 +95,14 @@ export function AgentTerminalView(props: ViewProps): React.ReactElement {
           targets={targets}
           selectedId={active.id}
           onSelect={(id) => { setSelectedId(id) }}
+          handoffLlm={handoffLlm}
         />
       )}
     </div>
   )
 }
 
-/** 方案C+ 会话区：agent 下拉（运行状态点）+ 会话控件条（新会话/历史▾）+ 内嵌终端。 */
+/** 方案C+ 会话区：agent 下拉（运行状态点）+ 会话控件条（新会话/Handoff/历史▾）+ 内嵌终端。 */
 function SessionArea(props: {
   agentId: string
   sessionId: string
@@ -108,6 +111,8 @@ function SessionArea(props: {
   targets: readonly TermTarget[]
   selectedId: string
   onSelect: (agentId: string) => void
+  /** 设置页的 Handoff DSH LLM 开关。 */
+  handoffLlm: boolean
 }): React.ReactElement {
   const { agentId, sessionId, displayName, targets, selectedId, onSelect } = props
   // t 的键类型由 LocaleNamespaceMap 推导，运行时只是查表函数。
@@ -236,12 +241,49 @@ function formatTime(value: string): string {
     }
   }, [histOpen])
 
-  const runAction = (action: { mode: 'new' } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
+  const runAction = (action: { mode: 'new'; initialPrompt?: string } | { mode: 'continue' } | { mode: 'resume'; resumeTarget: string }, label: string): void => {
     setHistOpen(false)
     setLaunchedIds((prev) => { const next = new Set(prev); next.add(agentId); return next })
     showToast(action.mode === 'new' ? t('view.newCreated') : label)
     void session?.openSession(action, label)
   }
+
+  /* ---- Handoff DSH：只读交接当前 DSH 会话 → 预览文档 → 启动 CLI 新会话 ---- */
+  interface HandoffPreview {
+    phase: 'loading' | 'ready' | 'failed'
+    doc: string
+    mode: 'extract' | 'llm'
+    llmFallback: boolean
+    chars: number
+  }
+  const [handoff, setHandoff] = useState<HandoffPreview | null>(null)
+
+  const prepareHandoff = (mode: 'extract' | 'llm'): void => {
+    setHandoff({ phase: 'loading', doc: '', mode, llmFallback: false, chars: 0 })
+    void fetch('/api/zn-agent-client/handoff-prepare', {
+      method: 'POST',
+      headers: { ...GUARD },
+      body: JSON.stringify({ session: sessionId, mode }),
+    }).then(async (response) => {
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; doc?: string; chars?: number; llmFallback?: boolean; error?: string } | null
+      if (!response.ok || payload === null || payload.ok !== true || typeof payload.doc !== 'string') {
+        throw new Error(payload?.error ?? `handoff-prepare 失败（${response.status}）`)
+      }
+      setHandoff({ phase: 'ready', doc: payload.doc, mode, llmFallback: payload.llmFallback === true, chars: payload.chars ?? payload.doc.length })
+    }).catch(() => {
+      setHandoff({ phase: 'failed', doc: '', mode, llmFallback: false, chars: 0 })
+    })
+  }
+
+  // 交接弹层：Esc / 点遮罩关闭。
+  useEffect(() => {
+    if (handoff === null) return
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setHandoff(null)
+    }
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('keydown', onKey) }
+  }, [handoff !== null])
 
   const shortId = (id: string): string => id.length > 8 ? id.slice(0, 8) : id
   const last = session?.lastAction
@@ -291,6 +333,13 @@ function formatTime(value: string): string {
           onClick={() => { runAction({ mode: 'new' }, t('view.labelNew')) }}
         >
           {t('view.newSession')}
+        </button>
+        <button
+          type="button"
+          className="znac-view-sbtn"
+          onClick={() => { prepareHandoff(props.handoffLlm ? 'llm' : 'extract') }}
+        >
+          {t('view.handoff')}
         </button>
         <div className="znac-view-histwrap" ref={histRef}>
           <button
@@ -377,6 +426,64 @@ function formatTime(value: string): string {
         restartLabel={t('view.restart')}
       />
       {toast !== '' && <div className="znac-view-toast" role="status">{toast}</div>}
+      {handoff !== null && (
+        <div
+          className="znac-ho-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('view.handoffTitle')}
+          onMouseDown={(event) => { if (event.target === event.currentTarget) setHandoff(null) }}
+        >
+          <div className="znac-ho-card">
+            <div className="znac-ho-head">
+              <span className="znac-ho-title">{t('view.handoffTitle')}</span>
+              {handoff.phase === 'ready' && (
+                <span className="znac-ho-meta">
+                  {handoff.mode === 'llm' ? t('view.handoffModeLlm') : t('view.handoffModeExtract')}
+                  {handoff.llmFallback ? ` · ${t('view.handoffLlmFallback')}` : ''}
+                  {` · ${handoff.chars}`}
+                </span>
+              )}
+              <button type="button" className="znac-ho-close" aria-label={t('view.handoffCancel')} onClick={() => { setHandoff(null) }}>×</button>
+            </div>
+            {handoff.phase === 'loading' && <p className="znac-ho-note">{t('view.handoffPreparing')}</p>}
+            {handoff.phase === 'failed' && (
+              <div className="znac-ho-note">
+                <p>{t('view.handoffFailed')}</p>
+                <button type="button" className="znac-view-sbtn" onClick={() => { prepareHandoff(handoff.mode) }}>{t('view.handoffRetry')}</button>
+              </div>
+            )}
+            {handoff.phase === 'ready' && (
+              <>
+                <pre className="znac-ho-doc">{handoff.doc}</pre>
+                <div className="znac-ho-actions">
+                  <button
+                    type="button"
+                    className="znac-view-sbtn"
+                    onClick={() => { prepareHandoff(handoff.mode === 'llm' ? 'extract' : 'llm') }}
+                  >
+                    {handoff.mode === 'llm' ? t('view.handoffRegenExtract') : t('view.handoffRegenLlm')}
+                  </button>
+                  <span className="znac-view-spacer" />
+                  <button type="button" className="znac-view-sbtn" onClick={() => { setHandoff(null) }}>{t('view.handoffCancel')}</button>
+                  <button
+                    type="button"
+                    className="znac-view-sbtn"
+                    data-kind="primary"
+                    onClick={() => {
+                      const doc = handoff.doc
+                      setHandoff(null)
+                      runAction({ mode: 'new', initialPrompt: doc }, t('view.handoffLaunch'))
+                    }}
+                  >
+                    {t('view.handoffLaunch')}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
