@@ -135,8 +135,19 @@ function getBoardFocus(): { readonly wsId: string; readonly seq: number } | null
   return focusState
 }
 
+/** 菜单图标：三栏看板（currentColor 跟随菜单文字色；尺寸对齐宿主菜单图标）。 */
+function BoardMenuIcon(): React.ReactElement {
+  return (
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+      <rect x="1.5" y="2.5" width="3.6" height="11" rx="1" fill="currentColor" />
+      <rect x="6.2" y="2.5" width="3.6" height="7.5" rx="1" fill="currentColor" opacity="0.55" />
+      <rect x="10.9" y="2.5" width="3.6" height="9.5" rx="1" fill="currentColor" opacity="0.8" />
+    </svg>
+  )
+}
+
 /**
- * 注册看板：main 面板 + 工作区菜单「打开看板」动作（菜单第一位，无独立侧栏图标）。
+ * 注册看板：main 面板 + 工作区菜单「CLI Agent看板」动作（菜单第一位，无独立侧栏图标）。
  * @param ctx - 客户端上下文。
  * @param controller - 配置表单控制器（inject 面带 useTemplateConfig 舱位）。
  */
@@ -161,6 +172,7 @@ export function registerWorkspaceBoard(ctx: Context, controller: { inject(): Tem
         resolve: (target) => [{
           id: 'znacp.open-board',
           label: tBind('board.menuOpen'),
+          icon: { key: 'znacp.board' },
           run: () => {
             setBoardFocus(target.workspaceId)
             layout?.selectPanel(BOARD_PANEL_ID)
@@ -169,6 +181,14 @@ export function registerWorkspaceBoard(ctx: Context, controller: { inject(): Tem
       }))
     }
   })
+  // 菜单图标：contextMenu.icon 是键控槽位（icon:{key} → 槽位按键找渲染器）。
+  // 内置键（workspace.rename 等）由 ui-workspace 注册；本插件注册自己的键。
+  // 该槽位的类型声明在未安装的 context-menu 包里 → 走窄化调用签名。
+  const slotsAny = ctx.slots as unknown as {
+    inject(name: string, setup: () => unknown): unknown
+    register(options: { readonly name: string; readonly key: string }, occupant: (props: unknown) => React.ReactNode): () => void
+  }
+  slotsAny.inject('contextMenu.icon', () => slotsAny.register({ name: 'contextMenu.icon', key: 'znacp.board' }, BoardMenuIcon))
   // main 面板的 register 选项没有 inject 舱位 → 配置 hooks 舱位在注册时直接
   // 取面（controller.inject() 只是构造 hooks，不依赖挂载时机）。
   const face = controller.inject()
