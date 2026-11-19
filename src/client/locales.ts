@@ -35,19 +35,27 @@ export type ZnAgentClientLocaleKey =
   | 'view.exited' | 'view.error' | 'view.restart'
   | 'view.sessions' | 'view.newSession' | 'view.history'
   | 'view.historyLoading' | 'view.historyFailed' | 'view.historyEmpty'
-  | 'view.labelAttach' | 'view.labelNew' | 'view.labelResume'
+  | 'view.labelAttach' | 'view.labelNew' | 'view.labelResume' | 'view.labelContinue'
+  | 'view.resumePasteHint' | 'view.resumeInvalid'
   | 'view.agentPicker'
   | 'view.idleHint' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
   // 工作区看板
   | 'board.title' | 'board.menuOpen' | 'board.newChat' | 'board.searchHint'
-  | 'board.tabChat' | 'board.tabCli' | 'board.tabArtifacts' | 'board.tabConfig'
-  | 'board.sessionUnit' | 'board.runningUnit'
+  | 'board.tabChat' | 'board.tabCli' | 'board.tabConfig' | 'board.tabAnalysis'
   | 'board.noWorkspaces' | 'board.noSessions' | 'board.cliLoading' | 'board.noCliSessions'
-  | 'board.resume' | 'board.archive' | 'board.archived'
+  | 'board.archive' | 'board.archived'
   | 'board.stRunning' | 'board.stWaiting' | 'board.stDone' | 'board.stIdle'
-  | 'board.openFailed' | 'board.createFailed' | 'board.cliOpened'
+  | 'board.openFailed' | 'board.createFailed'
+  | 'board.filterAll' | 'board.filterStatus' | 'board.sortLabel' | 'board.sortUpdated' | 'board.sortTitle'
+  | 'board.sortAsc' | 'board.sortDesc' | 'board.agentSelect'
+  | 'board.colSummary' | 'board.colUpdated'
+  | 'board.detailHint' | 'board.detailFailed'
+  | 'board.copyResume' | 'board.copyOk' | 'board.copyFailed'
+  | 'board.previewUnsupported' | 'board.previewEmpty' | 'board.roleUser' | 'board.roleAssistant'
+  | 'board.configMissing' | 'board.configSave' | 'board.configSaved' | 'board.configSaveFailed' | 'board.configLoadFailed'
+  | 'board.analysisWip'
 
 /** 英文文案。 */
 export const en: Record<ZnAgentClientLocaleKey, string> = {
@@ -114,6 +122,9 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelAttach': 'Attached session',
   'view.labelNew': 'New session',
   'view.labelResume': 'Resumed',
+  'view.labelContinue': 'Continued',
+  'view.resumePasteHint': 'Paste a resume command and press Enter',
+  'view.resumeInvalid': 'No session id found in that command',
   'view.agentPicker': '选择 CLI agent',
   'view.sessionLabel': '会话',
   'view.currentSession': '当前会话',
@@ -128,18 +139,40 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'board.menuOpen': 'Open CLIAgents board',
   'board.newChat': 'New session',
   'board.searchHint': 'Search sessions',
-  'board.tabChat': 'Sessions',
+  'board.tabChat': 'DSH sessions',
   'board.tabCli': 'CLI sessions',
-  'board.tabArtifacts': 'Artifacts',
-  'board.tabConfig': 'Setup',
-  'board.sessionUnit': 'sessions',
-  'board.runningUnit': 'running',
+  'board.tabConfig': 'Workspace setup',
+  'board.tabAnalysis': 'Analytics',
   'board.noWorkspaces': 'No workspaces yet',
   'board.noSessions': 'No sessions in this workspace',
   'board.cliLoading': 'Loading…',
   'board.noCliSessions': 'No CLI sessions in this workspace',
-  'board.resume': 'Resume',
   'board.archive': 'Archive',
+  'board.filterAll': 'All statuses',
+  'board.filterStatus': 'Filter by status',
+  'board.sortLabel': 'Sort',
+  'board.sortUpdated': 'Recently updated',
+  'board.sortTitle': 'By title',
+  'board.sortAsc': 'Oldest first',
+  'board.sortDesc': 'Newest first',
+  'board.agentSelect': 'Choose an agent',
+  'board.colSummary': 'Session',
+  'board.colUpdated': 'Updated',
+  'board.detailHint': 'Pick a session to preview',
+  'board.detailFailed': 'Failed to load the session',
+  'board.copyResume': 'Copy resume command',
+  'board.copyOk': 'Resume command copied',
+  'board.copyFailed': 'Copy failed',
+  'board.previewUnsupported': 'Preview is not supported for this agent yet',
+  'board.previewEmpty': 'No messages to show',
+  'board.roleUser': 'User',
+  'board.roleAssistant': 'Assistant',
+  'board.configMissing': 'No AGENTS.md in this workspace yet; saving will create it',
+  'board.configSave': 'Save',
+  'board.configSaved': 'AGENTS.md saved',
+  'board.configSaveFailed': 'Failed to save AGENTS.md',
+  'board.configLoadFailed': 'Failed to load AGENTS.md',
+  'board.analysisWip': 'Under construction — reserved for workspace analytics',
   'board.archived': 'Archived',
   'board.stRunning': 'Running',
   'board.stWaiting': 'Waiting for you',
@@ -147,7 +180,6 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'board.stIdle': 'Idle',
   'board.openFailed': 'Failed to open the session',
   'board.createFailed': 'Failed to create the session',
-  'board.cliOpened': 'CLI resumed in a new session',
 }
 
 /** 中文文案。 */
@@ -215,6 +247,9 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.labelAttach': '已接入会话',
   'view.labelNew': '新会话',
   'view.labelResume': '已还原',
+  'view.labelContinue': '已继续',
+  'view.resumePasteHint': '粘贴恢复命令，回车执行',
+  'view.resumeInvalid': '没认出恢复命令里的会话 id',
   'view.externalOpen': '在外部终端打开',
   'view.agentPicker': '选择 CLI agent',
   'view.sessionLabel': '会话',
@@ -229,18 +264,40 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'board.menuOpen': '打开 CLIAgents 看板',
   'board.newChat': '新会话',
   'board.searchHint': '搜索会话',
-  'board.tabChat': '对话',
+  'board.tabChat': 'DSH 会话',
   'board.tabCli': 'CLI 会话',
-  'board.tabArtifacts': '产物',
-  'board.tabConfig': '配置',
-  'board.sessionUnit': '个会话',
-  'board.runningUnit': '运行中',
+  'board.tabConfig': '工作区配置',
+  'board.tabAnalysis': '工作区分析',
   'board.noWorkspaces': '暂无工作区',
   'board.noSessions': '该工作区还没有会话',
   'board.cliLoading': '加载中…',
   'board.noCliSessions': '该工作区还没有 CLI 会话',
-  'board.resume': '恢复',
   'board.archive': '归档',
+  'board.filterAll': '全部状态',
+  'board.filterStatus': '按状态筛选',
+  'board.sortLabel': '排序',
+  'board.sortUpdated': '最近更新',
+  'board.sortTitle': '按标题',
+  'board.sortAsc': '最早优先',
+  'board.sortDesc': '最新优先',
+  'board.agentSelect': '选择 agent',
+  'board.colSummary': '会话',
+  'board.colUpdated': '更新时间',
+  'board.detailHint': '选择一个会话查看内容',
+  'board.detailFailed': '会话内容加载失败',
+  'board.copyResume': '复制恢复命令',
+  'board.copyOk': '恢复命令已复制',
+  'board.copyFailed': '复制失败',
+  'board.previewUnsupported': '该 agent 的会话暂不支持内容预览',
+  'board.previewEmpty': '没有可显示的消息',
+  'board.roleUser': '用户',
+  'board.roleAssistant': '助手',
+  'board.configMissing': '工作区还没有 AGENTS.md，保存后将创建',
+  'board.configSave': '保存',
+  'board.configSaved': 'AGENTS.md 已保存',
+  'board.configSaveFailed': 'AGENTS.md 保存失败',
+  'board.configLoadFailed': 'AGENTS.md 读取失败',
+  'board.analysisWip': '建设中——这个页签留给工作区分析',
   'board.archived': '已归档',
   'board.stRunning': '运行中',
   'board.stWaiting': '等待你',
@@ -248,5 +305,4 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'board.stIdle': '空闲',
   'board.openFailed': '打开会话失败',
   'board.createFailed': '创建会话失败',
-  'board.cliOpened': '已在新会话中恢复 CLI',
 }

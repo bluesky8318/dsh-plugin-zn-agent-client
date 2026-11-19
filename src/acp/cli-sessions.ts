@@ -143,8 +143,8 @@ async function listKimiSessions(cwd: string): Promise<CliSessionEntry[]> {
   return matched.slice(0, 20).map((entry) => ({ id: entry.id, summary: entry.summary, updatedAt: entry.updatedAt, source: 'cli' as const }))
 }
 
-/** cwd → claude 的项目目录 slug（/ → -，与 ~/.claude/projects 布局一致）。 */
-function claudeSlug(cwd: string): string {
+/** cwd → claude/qoder 的项目目录 slug（/ → -，与 ~/.claude/projects 布局一致）。 */
+export function claudeSlug(cwd: string): string {
   return cwd.replaceAll('/', '-')
 }
 

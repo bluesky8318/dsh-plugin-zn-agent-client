@@ -21,6 +21,7 @@ import { SessionIndex } from './acp/session-index.ts'
 import { createZnAgentClientRemote } from './acp/remote-service.ts'
 import { CliTerminalController, type SubprocessFace } from './acp/cli-terminal.ts'
 import { createCliTerminalRoutes, type WebServerFace, type RouteRequest, type RouteResponse } from './acp/cli-routes.ts'
+import { createWorkspaceRoutes } from './acp/workspace-routes.ts'
 import { openInExternalTerminal, type ExternalTerminal } from './external-terminal.ts'
 import type { AgentConfig } from './types/index.ts'
 
@@ -123,6 +124,8 @@ export function apply(ctx: Context, config: Config): void {
   const hostCtx = ctx as Context & {
     workingDirectory?: { defaultDirectory?: string; get(session: unknown): string }
     sessions?: { get?(id: string): unknown }
+    /** 工作区注册表（看板 AGENTS.md 路由把 workspaceId 解析成根目录用）。 */
+    workspaceRegistry?: { get?(workspaceId: string): { path?: string } | undefined }
   }
   const cwdFace = hostCtx.workingDirectory
   /** 从工具运行上下文解析调用方会话的工作目录；解析不到时退回进程 cwd。 */
@@ -226,6 +229,14 @@ export function apply(ctx: Context, config: Config): void {
         const session = hostCtx.sessions?.get?.(sessionId)
         return session === undefined ? undefined : cwdFace?.get(session)
       },
+    })) {
+      registerRoute(route)
+    }
+    // 看板路由：AGENTS.md 读写（workspaceId → 宿主注册表解析根目录，客户端不传路径）
+    // + CLI 会话内容预览/恢复命令。
+    for (const route of createWorkspaceRoutes({
+      resolveAgent: (agentId: string) => resolveAgentConfig(agentId) ?? undefined,
+      resolveWorkspacePath: async (workspaceId: string) => hostCtx.workspaceRegistry?.get?.(workspaceId)?.path ?? null,
     })) {
       registerRoute(route)
     }

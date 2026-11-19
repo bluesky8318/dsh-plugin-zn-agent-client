@@ -16,3 +16,6 @@ export const LOCALE_NAMESPACE = 'settings.znAgentClient'
 
 /** /znacp 命令名（复制到输入框的命令以此开头）。 */
 export const ACP_COMMAND_BASE = '/znacp'
+
+/** 插件自有路由的守卫头（宿主 cli-routes.guarred 校验同名头 === '1'）。 */
+export const GUARD_HEADER = 'x-zn-agent-client'
