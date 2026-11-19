@@ -524,6 +524,7 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 }
 .znac-view-topbar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
   padding: 6px 0;
@@ -739,6 +740,7 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znac-view-agentwrap { position: relative; display: inline-flex; }
 .znac-view-agentbtn {
   display: inline-flex; align-items: center; gap: 6px;
+  flex: none; white-space: nowrap;
   border: 0.5px solid var(--dsw-alias-border-l1);
   border-radius: 7px;
   background: var(--dsw-alias-bg-layer-2);
@@ -850,7 +852,7 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-wip { display: flex; flex: 1; align-items: center; justify-content: center; }
 .znb-wip p { margin: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-tertiary); }
 /* CLI 视图工具条：粘贴恢复命令输入框 */
-.znac-view-resumein { width: 220px; padding: 4px 9px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
+.znac-view-resumein { flex: 1 1 160px; width: auto; min-width: 140px; max-width: 220px; padding: 4px 9px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
 .znac-view-resumein:focus { border-color: var(--dsw-alias-state-business-primary); }
 /* ---- Handoff DSH 预览弹层：遮罩 + 卡片 + 文档 ---- */
 .znac-ho-backdrop { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: var(--dsw-alias-bg-mask-1); }
