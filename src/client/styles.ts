@@ -777,7 +777,7 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-sub { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
 .znb-search { width: 220px; padding: 5px 10px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
 .znb-search:focus { border-color: var(--dsw-alias-state-business-primary); }
-.znb-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.znb-main { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; }
 .znb-tabs { display: flex; align-items: center; gap: 4px; padding: 8px 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .znb-tab { padding: 6px 12px; font-size: 13px; line-height: 20px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
 .znb-tab-on { font-weight: 500; color: var(--dsw-alias-label-primary); border-bottom-color: var(--dsw-alias-state-business-primary); }
@@ -816,7 +816,7 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-clirow-on { background: var(--dsw-alias-bg-layer-2); }
 .znb-clirow-summary { flex: 1; min-width: 0; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .znb-clirow-time { flex: none; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
-.znb-clidetail { display: flex; flex-direction: column; flex: 1; min-width: 0; overflow: hidden; }
+.znb-clidetail { display: flex; flex-direction: column; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
 .znb-detail-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .znb-detail-id { font-size: 12px; line-height: 18px; font-weight: 500; color: var(--dsw-alias-label-primary); }
 .znb-detail-count { font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
