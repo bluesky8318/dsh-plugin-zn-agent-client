@@ -243,6 +243,19 @@ export function buildOps(
   return ops
 }
 
+/** 折叠分区（原生 details/summary，默认收起）。 */
+function Sec(props: { title: string; children: React.ReactNode }): React.ReactElement {
+  return (
+    <details className="znac-sec">
+      <summary className="znac-sec-head">
+        <span className="znac-sec-chev" aria-hidden="true">▸</span>
+        <span className="znac-sec-title">{props.title}</span>
+      </summary>
+      <div className="znac-sec-body">{props.children}</div>
+    </details>
+  )
+}
+
 /**
  * 渲染 Plugins 页上本插件的那一行摘要，或它的配置表单。
  */
@@ -331,6 +344,8 @@ function SettingsForm(
     >
       <h3 className="znac-form-title">{t('card.title')}</h3>
 
+      {/* 分区一：ACP + CLI 配置（agent 名册 / 默认 agent / 权限 / 日志） */}
+      <Sec title={t('card.secAcpCli')}>
       <div className="znac-field">
         <div className="znac-field-label">
           <span>{t('field.agents.label')}</span>
@@ -472,7 +487,15 @@ function SettingsForm(
           <span className="znac-field-hint" id="znac-log-events-hint">{t('field.logEvents.hint')}</span>
         </div>
       </div>
+      </Sec>
 
+      {/* 分区二：工作区项目配置（AGENTS.md 在看板「工作区配置」页签） */}
+      <Sec title={t('card.secWorkspace')}>
+        <p className="znac-note">{t('card.secWorkspaceHint')}</p>
+      </Sec>
+
+      {/* 分区三：CLI Agent 视图配置（Handoff DSH 摘要模板 + LLM 网关） */}
+      <Sec title={t('card.secView')}>
       <div className="znac-field znac-field-inline">
         <input
           id="znac-handoff-llm"
@@ -565,6 +588,7 @@ function SettingsForm(
         />
         <span className="znac-field-hint" id="znac-handoff-prompt-hint">{t('field.handoffLlmPrompt.hint')}</span>
       </div>
+      </Sec>
 
       {!snapshot.writable && <p className="znac-note">{t('card.readOnly')}</p>}
       {failed && <p className="znac-invalid" role="alert">{t('card.saveFailed')}</p>}

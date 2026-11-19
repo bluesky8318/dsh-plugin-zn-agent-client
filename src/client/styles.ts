@@ -232,6 +232,38 @@ const CSS = `
   flex-direction: column;
   gap: 16px;
 }
+.znac-sec {
+  border: 0.5px solid var(--dsw-alias-border-l4);
+  border-radius: var(--dsw-radius-md);
+  background: var(--dsw-alias-bg-layer-1);
+}
+.znac-sec-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+.znac-sec-head::-webkit-details-marker { display: none; }
+.znac-sec-chev {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+.znac-sec[open] .znac-sec-chev { transform: rotate(90deg); }
+.znac-sec-title { flex: 1; }
+.znac-sec-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 12px 12px;
+  border-top: 0.5px solid var(--dsw-alias-border-l4);
+}
 .znac-form-title {
   margin: 0;
   font-size: 14px;

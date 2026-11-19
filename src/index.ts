@@ -22,6 +22,13 @@ import { createZnAgentClientRemote } from './acp/remote-service.ts'
 import { CliTerminalController, type SubprocessFace } from './acp/cli-terminal.ts'
 import { createCliTerminalRoutes, type WebServerFace, type RouteRequest, type RouteResponse } from './acp/cli-routes.ts'
 import { createWorkspaceRoutes } from './acp/workspace-routes.ts'
+import {
+  DEFAULT_HANDOFF_TAIL,
+  DEFAULT_LLM_BASE_URL,
+  DEFAULT_LLM_MODEL,
+  DEFAULT_LLM_API_KEY_ENV,
+  DEFAULT_LLM_SYSTEM_PROMPT,
+} from './acp/cli-handoff.ts'
 import { openInExternalTerminal, type ExternalTerminal } from './external-terminal.ts'
 import type { AgentConfig } from './types/index.ts'
 
@@ -43,15 +50,15 @@ export interface Config {
   logEvents: Volatile<boolean>
   /** Handoff DSH 默认用本地 LLM 网关压缩对话（失败自动回落提取式）。 */
   handoffLlm: Volatile<boolean>
-  /** Handoff 交接文档的「接手说明」段落（空值回落内置缺省）。 */
+  /** Handoff 交接文档的「接手说明」段落（缺省 = 内置缺省文案，设置页可见可改）。 */
   handoffTail: Volatile<string>
-  /** LLM 网关地址（OpenAI 兼容 /v1；空值回落内置缺省）。 */
+  /** LLM 网关地址（OpenAI 兼容 /v1；缺省 = 内置缺省地址）。 */
   handoffLlmBaseUrl: Volatile<string>
-  /** LLM 模型 id（空值回落内置缺省）。 */
+  /** LLM 模型 id（缺省 = 内置缺省模型）。 */
   handoffLlmModel: Volatile<string>
-  /** 存放 LLM 网关 API key 的环境变量名（空值回落内置缺省）。 */
+  /** 存放 LLM 网关 API key 的环境变量名（缺省 = 内置缺省变量名）。 */
   handoffLlmApiKeyEnv: Volatile<string>
-  /** LLM 摘要的系统提示（空值回落内置缺省）。 */
+  /** LLM 摘要的系统提示（缺省 = 内置缺省提示词）。 */
   handoffLlmPrompt: Volatile<string>
 }
 
@@ -85,11 +92,12 @@ export const Config: Schema<any> = Schema.object({
   autoAllowPermissions: Schema.boolean().default(false).volatile(),
   logEvents: Schema.boolean().default(false).volatile(),
   handoffLlm: Schema.boolean().default(false).volatile(),
-  handoffTail: Schema.string().default('').volatile(),
-  handoffLlmBaseUrl: Schema.string().default('').volatile(),
-  handoffLlmModel: Schema.string().default('').volatile(),
-  handoffLlmApiKeyEnv: Schema.string().default('').volatile(),
-  handoffLlmPrompt: Schema.string().default('').volatile(),
+  // 缺省直接给内置真实值：设置页打开就能看到默认配置，而不是隐形回落。
+  handoffTail: Schema.string().default(DEFAULT_HANDOFF_TAIL).volatile(),
+  handoffLlmBaseUrl: Schema.string().default(DEFAULT_LLM_BASE_URL).volatile(),
+  handoffLlmModel: Schema.string().default(DEFAULT_LLM_MODEL).volatile(),
+  handoffLlmApiKeyEnv: Schema.string().default(DEFAULT_LLM_API_KEY_ENV).volatile(),
+  handoffLlmPrompt: Schema.string().default(DEFAULT_LLM_SYSTEM_PROMPT).volatile(),
 })
 
 declare module '@deepseek-ai/cordis' {
