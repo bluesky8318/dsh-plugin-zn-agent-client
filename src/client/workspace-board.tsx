@@ -145,14 +145,34 @@ function getBoardFocus(): { readonly wsId: string; readonly seq: number } | null
  * @param controller - 配置表单控制器（inject 面带 useTemplateConfig 舱位）。
  */
 export function registerWorkspaceBoard(ctx: Context, controller: { inject(): TemplateFace }): void {
+  const tBind = ctx.locale.bind(LOCALE_NAMESPACE)
   // 声明依赖宿主的 uiWorkspace / layout / contextMenus 服务（授权 API：开/建/归档会话、切主区面板、菜单贡献）。
+  // 注意：inject 回调在服务可用时才执行——菜单贡献必须在这里注册，
+  // 不能放在外层同步判断（服务未捕获时 contextMenus 还是 null）。
   ctx.inject(['uiWorkspace', 'layout', 'contextMenus'], (scope: Context) => {
     const raw = scope as unknown as { get?(key: string): unknown }
     uiWorkspace = (raw.get?.('uiWorkspace') ?? null) as ZnUiWorkspace | null
     layout = (raw.get?.('layout') ?? null) as ZnLayout | null
     contextMenus = (raw.get?.('contextMenus') ?? null) as ZnContextMenus | null
+    // 工作区菜单贡献（ui-workspace 自带的 重命名/删除 就是同一注册表注册的，
+    // target:'workspace'；effect 返回注销函数，插件卸载时宿主自动调用）。
+    if (contextMenus !== null) {
+      ctx.effect(() => contextMenus!.register({
+        id: 'znacp.open-board',
+        target: 'workspace',
+        order: 900,
+        resolve: (target) => [{
+          id: 'znacp.open-board',
+          label: tBind('board.menuOpen'),
+          separatorBefore: true,
+          run: () => {
+            setBoardFocus(target.workspaceId)
+            layout?.selectPanel(BOARD_PANEL_ID)
+          },
+        }],
+      }))
+    }
   })
-  const tBind = ctx.locale.bind(LOCALE_NAMESPACE)
   // main 面板的 register 选项没有 inject 舱位 → 配置 hooks 舱位在注册时直接
   // 取面（controller.inject() 只是构造 hooks，不依赖挂载时机）。
   const face = controller.inject()
@@ -166,24 +186,6 @@ export function registerWorkspaceBoard(ctx: Context, controller: { inject(): Tem
       templateConfig={face.hooks.templateConfig}
     />
   )))
-  // 工作区菜单贡献：卸载时注销（宿主约定：unload 撤回动作并中断查询）。
-  if (contextMenus !== null) {
-    const unregister = contextMenus.register({
-      id: 'znacp.open-board',
-      target: 'workspace',
-      order: 900,
-      resolve: (target) => [{
-        id: 'znacp.open-board',
-        label: tBind('board.menuOpen'),
-        separatorBefore: true,
-        run: () => {
-          setBoardFocus(target.workspaceId)
-          layout?.selectPanel(BOARD_PANEL_ID)
-        },
-      }],
-    })
-    ctx.effect(() => unregister)
-  }
 }
 
 /** 行状态：等待你 > 运行中 > 已完成 > 空闲（dsh-board 同款判定顺序）。 */
