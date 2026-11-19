@@ -425,21 +425,6 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
     }
   }
 
-  /** 在当前工作区新建一个 DSH 会话（空白，进主会话区）。 */
-  const createChatSession = (): void => {
-    if (ws === null || uiWorkspace === null) {
-      // 服务没捕获到（旧宿主缺失 uiWorkspace）也要有反馈，不能静默。
-      showToast(t('board.createFailed'))
-      return
-    }
-    // connectWorkspace 只负责「创建并打开」；看板是自定义主区面板，
-    // 打开会话不会自己把主区切走 → 显式 selectPanel('conversation')
-    // （官方 openClassicView 同款：open 之后显式切回会话区）。
-    void uiWorkspace.connectWorkspace(ws.workspaceId)
-      .then(() => { layout?.selectPanel('conversation') })
-      .catch(() => { showToast(t('board.createFailed')) })
-  }
-
   const archiveSession = (sessionId: string): void => {
     void uiWorkspace?.archiveSession(sessionId).catch(() => { showToast(t('board.openFailed')) })
   }
@@ -455,7 +440,6 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
           <h1 className="znb-title">{ws !== null && ws.title !== '' ? ws.title : t('board.title')}</h1>
           <p className="znb-sub">{ws?.path ?? ''}</p>
         </div>
-        <button type="button" className="znb-new" onClick={() => { createChatSession() }}>＋ {t('board.newChat')}</button>
       </header>
       <div className="znb-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'dsh'} className={tab === 'dsh' ? 'znb-tab znb-tab-on' : 'znb-tab'} onClick={() => { setTab('dsh') }}>{t('board.tabChat')}</button>

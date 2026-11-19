@@ -42,12 +42,12 @@ export type ZnAgentClientLocaleKey =
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
   // 工作区看板
-  | 'board.title' | 'board.menuOpen' | 'board.newChat' | 'board.searchHint'
+  | 'board.title' | 'board.menuOpen' | 'board.searchHint'
   | 'board.tabChat' | 'board.tabCli' | 'board.tabConfig' | 'board.tabAnalysis'
   | 'board.noWorkspaces' | 'board.noSessions' | 'board.cliLoading' | 'board.noCliSessions'
   | 'board.archive' | 'board.archived'
   | 'board.stRunning' | 'board.stWaiting' | 'board.stDone' | 'board.stIdle'
-  | 'board.openFailed' | 'board.createFailed'
+  | 'board.openFailed'
   | 'board.filterAll' | 'board.filterStatus' | 'board.sortLabel' | 'board.sortUpdated' | 'board.sortTitle'
   | 'board.sortAsc' | 'board.sortDesc' | 'board.agentSelect'
   | 'board.colSummary' | 'board.colUpdated'
@@ -137,7 +137,6 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalFailed': 'Open failed',
   'board.title': 'CLIAgents',
   'board.menuOpen': 'Open CLIAgents board',
-  'board.newChat': 'New session',
   'board.searchHint': 'Search sessions',
   'board.tabChat': 'DSH sessions',
   'board.tabCli': 'CLI sessions',
@@ -179,7 +178,6 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'board.stDone': 'Completed',
   'board.stIdle': 'Idle',
   'board.openFailed': 'Failed to open the session',
-  'board.createFailed': 'Failed to create the session',
 }
 
 /** 中文文案。 */
@@ -262,7 +260,6 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalFailed': '打开失败',
   'board.title': 'CLIAgents',
   'board.menuOpen': '打开 CLIAgents 看板',
-  'board.newChat': '新会话',
   'board.searchHint': '搜索会话',
   'board.tabChat': 'DSH 会话',
   'board.tabCli': 'CLI 会话',
@@ -304,5 +301,4 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'board.stDone': '已完成',
   'board.stIdle': '空闲',
   'board.openFailed': '打开会话失败',
-  'board.createFailed': '创建会话失败',
 }

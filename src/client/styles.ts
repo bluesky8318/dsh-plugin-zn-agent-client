@@ -777,8 +777,6 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-sub { margin: 2px 0 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
 .znb-search { width: 220px; padding: 5px 10px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
 .znb-search:focus { border-color: var(--dsw-alias-state-business-primary); }
-.znb-new { padding: 5px 12px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; cursor: pointer; }
-.znb-new:hover { background: var(--dsw-alias-interactive-bg-hover); }
 .znb-main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
 .znb-tabs { display: flex; align-items: center; gap: 4px; padding: 8px 14px 0; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .znb-tab { padding: 6px 12px; font-size: 13px; line-height: 20px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--dsw-alias-label-secondary); cursor: pointer; }
