@@ -24,6 +24,11 @@ export type ZnAgentClientLocaleKey =
   | 'field.autoAllow.label' | 'field.autoAllow.hint'
   | 'field.logEvents.label' | 'field.logEvents.hint'
   | 'field.handoffLlm.label' | 'field.handoffLlm.hint'
+  | 'field.handoffTail.label' | 'field.handoffTail.hint'
+  | 'field.handoffLlmBaseUrl.label' | 'field.handoffLlmBaseUrl.hint'
+  | 'field.handoffLlmModel.label' | 'field.handoffLlmModel.hint'
+  | 'field.handoffLlmApiKeyEnv.label' | 'field.handoffLlmApiKeyEnv.hint'
+  | 'field.handoffLlmPrompt.label' | 'field.handoffLlmPrompt.hint'
   // agent picker 浮层
   | 'launcher.title' | 'launcher.close' | 'launcher.empty' | 'launcher.hint'
   | 'launcher.copy' | 'launcher.copied' | 'launcher.settings' | 'launcher.settingsHint'
@@ -41,6 +46,7 @@ export type ZnAgentClientLocaleKey =
   | 'view.handoff' | 'view.handoffTitle' | 'view.handoffPreparing' | 'view.handoffFailed' | 'view.handoffRetry'
   | 'view.handoffLaunch' | 'view.handoffCancel' | 'view.handoffModeExtract' | 'view.handoffModeLlm'
   | 'view.handoffLlmFallback' | 'view.handoffRegenLlm' | 'view.handoffRegenExtract'
+  | 'view.handoffConfirmLlm' | 'view.handoffUseExtract' | 'view.handoffConfirmLlmRun'
   | 'view.agentPicker'
   | 'view.idleHint' | 'view.sessionLabel' | 'view.currentSession' | 'view.workspace'
   | 'view.switchedTo' | 'view.newCreated'
@@ -102,6 +108,16 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'field.logEvents.hint': 'Log process lifecycle and stderr summaries to the host console.',
   'field.handoffLlm.label': 'Handoff uses local LLM',
   'field.handoffLlm.hint': 'Handoff DSH summarizes the session via the local LLM gateway before preview; falls back to the extractive template on failure.',
+  'field.handoffTail.label': 'Handoff closing note',
+  'field.handoffTail.hint': 'Closing paragraph of the handoff document. Empty uses the built-in default.',
+  'field.handoffLlmBaseUrl.label': 'LLM gateway base URL',
+  'field.handoffLlmBaseUrl.hint': 'OpenAI-compatible /v1 endpoint. Empty uses the built-in default.',
+  'field.handoffLlmModel.label': 'LLM model id',
+  'field.handoffLlmModel.hint': 'Model name passed to the gateway. Empty uses the built-in default.',
+  'field.handoffLlmApiKeyEnv.label': 'LLM key env var',
+  'field.handoffLlmApiKeyEnv.hint': 'Environment variable holding the gateway API key. Empty uses the built-in default.',
+  'field.handoffLlmPrompt.label': 'LLM summary prompt',
+  'field.handoffLlmPrompt.hint': 'System prompt for the summarization call. Empty uses the built-in default.',
   'launcher.title': 'ACP agents',
   'launcher.close': 'Close',
   'launcher.empty': 'No ACP agents configured yet. Add one in Settings → Plugins → this bundle.',
@@ -144,6 +160,9 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.handoffRetry': 'Retry',
   'view.handoffLaunch': 'Start CLI with handoff',
   'view.handoffCancel': 'Close',
+  'view.handoffConfirmLlm': 'LLM summarization calls the local model gateway: it costs tokens and is slower than the extractive template. Continue?',
+  'view.handoffUseExtract': 'Use extractive instead',
+  'view.handoffConfirmLlmRun': 'Confirm LLM',
   'view.handoffModeExtract': 'Extractive',
   'view.handoffModeLlm': 'LLM summary',
   'view.handoffLlmFallback': 'LLM failed, extractive fallback',
@@ -241,6 +260,16 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'field.logEvents.hint': '把进程生命周期与 stderr 摘要输出到宿主控制台。',
   'field.handoffLlm.label': 'Handoff 用本地大模型摘要',
   'field.handoffLlm.hint': '开启后 Handoff DSH 先经本地 LLM 网关压缩对话再预览；失败自动回落提取式模板。',
+  'field.handoffTail.label': '交接文档接手说明',
+  'field.handoffTail.hint': '交接文档末尾的接手说明段落；留空使用内置缺省文案。',
+  'field.handoffLlmBaseUrl.label': 'LLM 网关地址',
+  'field.handoffLlmBaseUrl.hint': 'OpenAI 兼容的 /v1 地址；留空使用内置缺省。',
+  'field.handoffLlmModel.label': 'LLM 模型 id',
+  'field.handoffLlmModel.hint': '传给网关的模型名；留空使用内置缺省。',
+  'field.handoffLlmApiKeyEnv.label': 'LLM key 环境变量名',
+  'field.handoffLlmApiKeyEnv.hint': '存放网关 API key 的环境变量名；留空使用内置缺省。',
+  'field.handoffLlmPrompt.label': 'LLM 摘要提示词',
+  'field.handoffLlmPrompt.hint': '摘要调用的系统提示词；留空使用内置缺省。',
   'launcher.title': 'ACP 智能体',
   'launcher.close': '关闭',
   'launcher.empty': '还没有配置 ACP agent。到 设置 → 插件 → 本插件 添加。',
@@ -283,6 +312,9 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.handoffRetry': '重试',
   'view.handoffLaunch': '带交接文档启动 CLI',
   'view.handoffCancel': '关闭',
+  'view.handoffConfirmLlm': 'LLM 摘要会调用本地模型网关：消耗费用且比提取式更慢。确认继续？',
+  'view.handoffUseExtract': '改用提取式',
+  'view.handoffConfirmLlmRun': '确认使用 LLM',
   'view.handoffModeExtract': '提取式',
   'view.handoffModeLlm': 'LLM 摘要',
   'view.handoffLlmFallback': 'LLM 失败，已回落提取式',

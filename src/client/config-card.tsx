@@ -48,6 +48,11 @@ interface Draft {
   autoAllow: boolean
   logEvents: boolean
   handoffLlm: boolean
+  handoffTail: string
+  handoffLlmBaseUrl: string
+  handoffLlmModel: string
+  handoffLlmApiKeyEnv: string
+  handoffLlmPrompt: string
 }
 
 /** 草稿行的 key 自增源（仅用于 React 列表稳定键）。 */
@@ -123,6 +128,11 @@ function readDraft(value: Record<string, unknown>): Draft {
     autoAllow: value.autoAllowPermissions === true,
     logEvents: value.logEvents === true,
     handoffLlm: value.handoffLlm === true,
+    handoffTail: typeof value.handoffTail === 'string' ? value.handoffTail : '',
+    handoffLlmBaseUrl: typeof value.handoffLlmBaseUrl === 'string' ? value.handoffLlmBaseUrl : '',
+    handoffLlmModel: typeof value.handoffLlmModel === 'string' ? value.handoffLlmModel : '',
+    handoffLlmApiKeyEnv: typeof value.handoffLlmApiKeyEnv === 'string' ? value.handoffLlmApiKeyEnv : '',
+    handoffLlmPrompt: typeof value.handoffLlmPrompt === 'string' ? value.handoffLlmPrompt : '',
   }
 }
 
@@ -218,6 +228,17 @@ export function buildOps(
   }
   if (draft.handoffLlm !== accepted.handoffLlm) {
     ops.push({ op: 'set', path: ['handoffLlm'], value: draft.handoffLlm })
+  }
+  // Handoff 文本字段：空串回落内置缺省 → 空值 unset 回落组装层。
+  for (const field of ['handoffTail', 'handoffLlmBaseUrl', 'handoffLlmModel', 'handoffLlmApiKeyEnv', 'handoffLlmPrompt'] as const) {
+    const next = draft[field].trim()
+    if (next !== (typeof accepted[field] === 'string' ? (accepted[field] as string) : '')) {
+      if (next === '') {
+        ops.push({ op: 'unset', path: [field] })
+      } else {
+        ops.push({ op: 'set', path: [field], value: next })
+      }
+    }
   }
   return ops
 }
@@ -467,6 +488,84 @@ function SettingsForm(
         </div>
       </div>
 
+      {/* Handoff DSH：接手说明 + LLM 网关配置（空值回落内置缺省）。 */}
+      <div className="znac-field">
+        <div className="znac-field-label">
+          <label htmlFor="znac-handoff-tail">{t('field.handoffTail.label')}</label>
+        </div>
+        <textarea
+          id="znac-handoff-tail"
+          className="znac-textarea"
+          rows={3}
+          value={draft.handoffTail}
+          disabled={!editable}
+          aria-describedby="znac-handoff-tail-hint"
+          onChange={(event) => { setDraft({ ...draft, handoffTail: event.currentTarget.value }) }}
+        />
+        <span className="znac-field-hint" id="znac-handoff-tail-hint">{t('field.handoffTail.hint')}</span>
+      </div>
+
+      <div className="znac-field">
+        <div className="znac-field-label">
+          <label htmlFor="znac-handoff-url">{t('field.handoffLlmBaseUrl.label')}</label>
+        </div>
+        <input
+          id="znac-handoff-url"
+          type="text"
+          value={draft.handoffLlmBaseUrl}
+          disabled={!editable}
+          aria-describedby="znac-handoff-url-hint"
+          onChange={(event) => { setDraft({ ...draft, handoffLlmBaseUrl: event.currentTarget.value }) }}
+        />
+        <span className="znac-field-hint" id="znac-handoff-url-hint">{t('field.handoffLlmBaseUrl.hint')}</span>
+      </div>
+
+      <div className="znac-field">
+        <div className="znac-field-label">
+          <label htmlFor="znac-handoff-model">{t('field.handoffLlmModel.label')}</label>
+        </div>
+        <input
+          id="znac-handoff-model"
+          type="text"
+          value={draft.handoffLlmModel}
+          disabled={!editable}
+          aria-describedby="znac-handoff-model-hint"
+          onChange={(event) => { setDraft({ ...draft, handoffLlmModel: event.currentTarget.value }) }}
+        />
+        <span className="znac-field-hint" id="znac-handoff-model-hint">{t('field.handoffLlmModel.hint')}</span>
+      </div>
+
+      <div className="znac-field">
+        <div className="znac-field-label">
+          <label htmlFor="znac-handoff-keyenv">{t('field.handoffLlmApiKeyEnv.label')}</label>
+        </div>
+        <input
+          id="znac-handoff-keyenv"
+          type="text"
+          value={draft.handoffLlmApiKeyEnv}
+          disabled={!editable}
+          aria-describedby="znac-handoff-keyenv-hint"
+          onChange={(event) => { setDraft({ ...draft, handoffLlmApiKeyEnv: event.currentTarget.value }) }}
+        />
+        <span className="znac-field-hint" id="znac-handoff-keyenv-hint">{t('field.handoffLlmApiKeyEnv.hint')}</span>
+      </div>
+
+      <div className="znac-field">
+        <div className="znac-field-label">
+          <label htmlFor="znac-handoff-prompt">{t('field.handoffLlmPrompt.label')}</label>
+        </div>
+        <textarea
+          id="znac-handoff-prompt"
+          className="znac-textarea"
+          rows={5}
+          value={draft.handoffLlmPrompt}
+          disabled={!editable}
+          aria-describedby="znac-handoff-prompt-hint"
+          onChange={(event) => { setDraft({ ...draft, handoffLlmPrompt: event.currentTarget.value }) }}
+        />
+        <span className="znac-field-hint" id="znac-handoff-prompt-hint">{t('field.handoffLlmPrompt.hint')}</span>
+      </div>
+
       {!snapshot.writable && <p className="znac-note">{t('card.readOnly')}</p>}
       {failed && <p className="znac-invalid" role="alert">{t('card.saveFailed')}</p>}
       {envInvalid && <p className="znac-invalid" role="alert">{t('field.agent.invalidEnv')}</p>}
@@ -500,5 +599,10 @@ function draftToComparable(draft: Draft): unknown {
     autoAllow: draft.autoAllow,
     logEvents: draft.logEvents,
     handoffLlm: draft.handoffLlm,
+    handoffTail: draft.handoffTail,
+    handoffLlmBaseUrl: draft.handoffLlmBaseUrl,
+    handoffLlmModel: draft.handoffLlmModel,
+    handoffLlmApiKeyEnv: draft.handoffLlmApiKeyEnv,
+    handoffLlmPrompt: draft.handoffLlmPrompt,
   }
 }

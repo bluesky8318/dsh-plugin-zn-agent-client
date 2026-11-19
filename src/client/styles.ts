@@ -287,7 +287,8 @@ const CSS = `
   color: var(--dsw-alias-label-tertiary);
 }
 .znac-form input[type='text'],
-.znac-form input[type='number'] {
+.znac-form input[type='number'],
+.znac-form textarea.znac-textarea {
   box-sizing: border-box;
   width: 100%;
   padding: 5px 8px;
@@ -298,6 +299,10 @@ const CSS = `
   font-family: inherit;
   font-size: 13px;
   line-height: 20px;
+}
+.znac-form textarea.znac-textarea {
+  resize: vertical;
+  min-height: 60px;
 }
 .znac-agent {
   display: flex;

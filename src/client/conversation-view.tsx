@@ -250,7 +250,7 @@ function formatTime(value: string): string {
 
   /* ---- Handoff DSH：只读交接当前 DSH 会话 → 预览文档 → 启动 CLI 新会话 ---- */
   interface HandoffPreview {
-    phase: 'loading' | 'ready' | 'failed'
+    phase: 'confirm' | 'loading' | 'ready' | 'failed'
     doc: string
     mode: 'extract' | 'llm'
     llmFallback: boolean
@@ -258,7 +258,16 @@ function formatTime(value: string): string {
   }
   const [handoff, setHandoff] = useState<HandoffPreview | null>(null)
 
+  // LLM 模式先确认（要花钱、更慢）；提取式直接生成。
   const prepareHandoff = (mode: 'extract' | 'llm'): void => {
+    if (mode === 'llm') {
+      setHandoff({ phase: 'confirm', doc: '', mode, llmFallback: false, chars: 0 })
+      return
+    }
+    void runPrepare(mode)
+  }
+
+  const runPrepare = (mode: 'extract' | 'llm'): void => {
     setHandoff({ phase: 'loading', doc: '', mode, llmFallback: false, chars: 0 })
     void fetch('/api/zn-agent-client/handoff-prepare', {
       method: 'POST',
@@ -274,16 +283,6 @@ function formatTime(value: string): string {
       setHandoff({ phase: 'failed', doc: '', mode, llmFallback: false, chars: 0 })
     })
   }
-
-  // 交接弹层：Esc / 点遮罩关闭。
-  useEffect(() => {
-    if (handoff === null) return
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setHandoff(null)
-    }
-    document.addEventListener('keydown', onKey)
-    return () => { document.removeEventListener('keydown', onKey) }
-  }, [handoff !== null])
 
   const shortId = (id: string): string => id.length > 8 ? id.slice(0, 8) : id
   const last = session?.lastAction
@@ -432,7 +431,6 @@ function formatTime(value: string): string {
           role="dialog"
           aria-modal="true"
           aria-label={t('view.handoffTitle')}
-          onMouseDown={(event) => { if (event.target === event.currentTarget) setHandoff(null) }}
         >
           <div className="znac-ho-card">
             <div className="znac-ho-head">
@@ -446,6 +444,24 @@ function formatTime(value: string): string {
               )}
               <button type="button" className="znac-ho-close" aria-label={t('view.handoffCancel')} onClick={() => { setHandoff(null) }}>×</button>
             </div>
+            {handoff.phase === 'confirm' && (
+              <div className="znac-ho-note">
+                <p>{t('view.handoffConfirmLlm')}</p>
+                <div className="znac-ho-actions">
+                  <button type="button" className="znac-view-sbtn" onClick={() => { runPrepare('extract') }}>{t('view.handoffUseExtract')}</button>
+                  <span className="znac-view-spacer" />
+                  <button type="button" className="znac-view-sbtn" onClick={() => { setHandoff(null) }}>{t('view.handoffCancel')}</button>
+                  <button
+                    type="button"
+                    className="znac-view-sbtn"
+                    data-kind="primary"
+                    onClick={() => { runPrepare('llm') }}
+                  >
+                    {t('view.handoffConfirmLlmRun')}
+                  </button>
+                </div>
+              </div>
+            )}
             {handoff.phase === 'loading' && <p className="znac-ho-note">{t('view.handoffPreparing')}</p>}
             {handoff.phase === 'failed' && (
               <div className="znac-ho-note">

@@ -26,6 +26,14 @@ export interface WorkspaceRouteDeps {
   getSession(sessionId: string): unknown
   /** 会话 id → 当前工作区目录。 */
   resolveSessionCwd(sessionId: string): string | undefined
+  /** Handoff 配置现读（接手说明文案 + LLM 网关地址/模型/key 环境变量/系统提示）。 */
+  handoffConfig(): {
+    readonly tail: string
+    readonly llmBaseUrl: string
+    readonly llmModel: string
+    readonly llmApiKeyEnv: string
+    readonly llmSystemPrompt: string
+  }
 }
 
 const MAX_AGENTS_MD_BYTES = 512 * 1024
@@ -186,17 +194,23 @@ export function createWorkspaceRoutes(deps: WorkspaceRouteDeps): Array<{
         const messages = normalizeHandoffMessages(sessionObj.deriveMessages())
         const events = normalizeHandoffEvents(typeof sessionObj.snapshotEvents === 'function' ? sessionObj.snapshotEvents() : undefined)
         const cwd = deps.resolveSessionCwd(sessionId) ?? ''
+        const handoffCfg = deps.handoffConfig()
         if (mode === 'llm' && messages.length > 0) {
-          const summary = await llmSummarize(messages)
+          const summary = await llmSummarize(messages, {
+            baseUrl: handoffCfg.llmBaseUrl,
+            model: handoffCfg.llmModel,
+            apiKeyEnv: handoffCfg.llmApiKeyEnv,
+            systemPrompt: handoffCfg.llmSystemPrompt,
+          })
           if (summary !== null) {
-            json(res, 200, ok(handoffPayload(buildHandoffDoc({ sessionId, cwd, messages, events, mode, llmSummary: summary }))))
+            json(res, 200, ok(handoffPayload(buildHandoffDoc({ sessionId, cwd, messages, events, mode, tail: handoffCfg.tail, llmSummary: summary }))))
             return
           }
           // LLM 失败回落提取式，标记 llmFallback 让客户端提示。
-          json(res, 200, ok(handoffPayload(buildHandoffDoc({ sessionId, cwd, messages, events, mode, llmFallback: true }))))
+          json(res, 200, ok(handoffPayload(buildHandoffDoc({ sessionId, cwd, messages, events, mode, tail: handoffCfg.tail, llmFallback: true }))))
           return
         }
-        json(res, 200, ok(handoffPayload(buildHandoffDoc({ sessionId, cwd, messages, events, mode }))))
+        json(res, 200, ok(handoffPayload(buildHandoffDoc({ sessionId, cwd, messages, events, mode, tail: handoffCfg.tail }))))
       },
     },
   ]

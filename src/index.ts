@@ -43,6 +43,16 @@ export interface Config {
   logEvents: Volatile<boolean>
   /** Handoff DSH 默认用本地 LLM 网关压缩对话（失败自动回落提取式）。 */
   handoffLlm: Volatile<boolean>
+  /** Handoff 交接文档的「接手说明」段落（空值回落内置缺省）。 */
+  handoffTail: Volatile<string>
+  /** LLM 网关地址（OpenAI 兼容 /v1；空值回落内置缺省）。 */
+  handoffLlmBaseUrl: Volatile<string>
+  /** LLM 模型 id（空值回落内置缺省）。 */
+  handoffLlmModel: Volatile<string>
+  /** 存放 LLM 网关 API key 的环境变量名（空值回落内置缺省）。 */
+  handoffLlmApiKeyEnv: Volatile<string>
+  /** LLM 摘要的系统提示（空值回落内置缺省）。 */
+  handoffLlmPrompt: Volatile<string>
 }
 
 /** /znacp 斜杠命令名（/acp 被其他插件占用）。 */
@@ -75,6 +85,11 @@ export const Config: Schema<any> = Schema.object({
   autoAllowPermissions: Schema.boolean().default(false).volatile(),
   logEvents: Schema.boolean().default(false).volatile(),
   handoffLlm: Schema.boolean().default(false).volatile(),
+  handoffTail: Schema.string().default('').volatile(),
+  handoffLlmBaseUrl: Schema.string().default('').volatile(),
+  handoffLlmModel: Schema.string().default('').volatile(),
+  handoffLlmApiKeyEnv: Schema.string().default('').volatile(),
+  handoffLlmPrompt: Schema.string().default('').volatile(),
 })
 
 declare module '@deepseek-ai/cordis' {
@@ -245,6 +260,14 @@ export function apply(ctx: Context, config: Config): void {
         const session = hostCtx.sessions?.get?.(sessionId)
         return session === undefined ? undefined : cwdFace?.get(session)
       },
+      // Handoff 配置现读（空值由 cli-handoff 内部回落内置缺省）。
+      handoffConfig: () => ({
+        tail: config.handoffTail.get(),
+        llmBaseUrl: config.handoffLlmBaseUrl.get(),
+        llmModel: config.handoffLlmModel.get(),
+        llmApiKeyEnv: config.handoffLlmApiKeyEnv.get(),
+        llmSystemPrompt: config.handoffLlmPrompt.get(),
+      }),
     })) {
       registerRoute(route)
     }

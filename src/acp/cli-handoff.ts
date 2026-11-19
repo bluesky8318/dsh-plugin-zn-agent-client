@@ -40,6 +40,8 @@ export interface HandoffInput {
   readonly llmSummary?: string
   /** LLM 调用失败回落提取式时为 true。 */
   readonly llmFallback?: boolean
+  /** 接手说明段落（设置页可配；缺省用 DEFAULT_HANDOFF_TAIL）。 */
+  readonly tail?: string
 }
 
 /** buildHandoffDoc 的产物（客户端预览卡片直接展示 doc）。 */
@@ -103,11 +105,8 @@ export function buildHandoffDoc(input: HandoffInput): HandoffResult {
     `- 工作区: ${input.cwd !== '' ? input.cwd : '（未知）'}`,
     '',
   ].join('\n')
-  const tail = [
-    '',
-    '## 接手说明',
-    '以上是 DeepSeek Harness 的 DSH 会话快照。请基于这些上下文继续完成未竟的工作；需要更多细节时直接查看工作区里的文件。',
-  ].join('\n')
+  const tailText = input.tail !== undefined && input.tail.trim() !== '' ? input.tail.trim() : DEFAULT_HANDOFF_TAIL
+  const tail = ['', '## 接手说明', tailText].join('\n')
   let body: string
   let truncated = false
   if (input.mode === 'llm' && typeof input.llmSummary === 'string' && input.llmSummary.trim() !== '') {
@@ -132,42 +131,57 @@ export function buildHandoffDoc(input: HandoffInput): HandoffResult {
   }
 }
 
-/** 本地 LLM 网关（OpenAI 兼容）。URL/模型可用环境变量覆盖；key 走 MAGPIE_GATEWAY_KEY。 */
-const GATEWAY_URL = process.env.MAGPIE_GATEWAY_URL ?? 'http://127.0.0.1:3425/v1/chat/completions'
-const GATEWAY_MODEL = process.env.MAGPIE_GATEWAY_MODEL ?? 'group/smart-split'
+/** 交接文档的「接手说明」缺省文案（设置页 handoffTail 可覆盖）。 */
+export const DEFAULT_HANDOFF_TAIL =
+  '以上是 DeepSeek Harness 的 DSH 会话快照。请基于这些上下文，给出需要继续完成未竟的工作列表，确认需要继续哪些工作；需要更多细节时直接查看工作区里的文件。'
 
-/** LLM 摘要的系统提示。 */
-const LLM_SYSTEM_PROMPT = [
+/** LLM 网关缺省地址 / 模型 / key 环境变量名 / 系统提示（设置页可覆盖，空值回落这里）。 */
+export const DEFAULT_LLM_BASE_URL = 'http://127.0.0.1:3425/v1'
+export const DEFAULT_LLM_MODEL = 'group/smart-split'
+export const DEFAULT_LLM_API_KEY_ENV = 'MAGPIE_GATEWAY_KEY'
+export const DEFAULT_LLM_SYSTEM_PROMPT = [
   '你是会话交接摘要助手。把给定的 DSH 会话对话压缩成一份给下一个 AI agent 接手用的中文交接文档。',
   '严格用以下 Markdown 小节输出（没有内容的节写「（无）」）：',
   '# 任务目标\n# 已完成\n# 未完成与下一步\n# 关键决定与原因\n# 失败与教训',
   '只依据对话内容，不要编造；保留具体的文件路径、命令、报错原文等可执行细节。',
 ].join('\n')
 
+/** LLM 调用配置（宿主从插件设置现读现传；字段空值回落上面各缺省）。 */
+export interface LlmCallConfig {
+  readonly baseUrl?: string
+  readonly model?: string
+  readonly apiKeyEnv?: string
+  readonly systemPrompt?: string
+}
+
 /**
  * 调本地网关把对话压成摘要；任何失败返回 null（调用方回落提取式）。
  * 网关 key 缺省时也尝试无鉴权请求（本机网关实测可匿名列出模型）。
  */
-export async function llmSummarize(messages: readonly HandoffMessage[]): Promise<string | null> {
+export async function llmSummarize(messages: readonly HandoffMessage[], cfg: LlmCallConfig = {}): Promise<string | null> {
   const transcript = messages
     .map((message) => `[${message.role === 'user' ? '用户' : '助手'}] ${message.text}`)
     .join('\n')
     .slice(0, LLM_INPUT_CHARS)
   if (transcript.trim() === '') return null
-  const key = process.env.MAGPIE_GATEWAY_KEY ?? ''
+  const baseUrl = (cfg.baseUrl !== undefined && cfg.baseUrl.trim() !== '' ? cfg.baseUrl : DEFAULT_LLM_BASE_URL).replace(/\/+$/, '')
+  const model = cfg.model !== undefined && cfg.model.trim() !== '' ? cfg.model : DEFAULT_LLM_MODEL
+  const systemPrompt = cfg.systemPrompt !== undefined && cfg.systemPrompt.trim() !== '' ? cfg.systemPrompt : DEFAULT_LLM_SYSTEM_PROMPT
+  const keyEnv = cfg.apiKeyEnv !== undefined && cfg.apiKeyEnv.trim() !== '' ? cfg.apiKeyEnv : DEFAULT_LLM_API_KEY_ENV
+  const key = process.env[keyEnv] ?? ''
   const controller = new AbortController()
   const timer = setTimeout(() => { controller.abort() }, 120_000)
   try {
-    const response = await fetch(GATEWAY_URL, {
+    const response = await fetch(`${baseUrl}/chat/completions`, {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
         ...(key !== '' ? { authorization: `Bearer ${key}` } : {}),
       },
       body: JSON.stringify({
-        model: GATEWAY_MODEL,
+        model,
         messages: [
-          { role: 'system', content: LLM_SYSTEM_PROMPT },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: transcript },
         ],
       }),
