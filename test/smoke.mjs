@@ -85,7 +85,7 @@ const config = {
 apply(ctx, config)
 
 assert.equal(name, 'dsh-plugin-zn-agent-client')
-assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions'])
+assert.deepEqual(inject, ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions', 'workspaceRegistry'])
 
 assert.ok(registeredTools.some(t => t.name === 'list_acp_agents'), 'list_acp_agents should be registered')
 assert.ok(registeredTools.some(t => t.name === 'call_acp_agent'), 'call_acp_agent should be registered')

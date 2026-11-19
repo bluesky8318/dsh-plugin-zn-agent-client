@@ -29,7 +29,7 @@ import type { AgentConfig } from './types/index.ts'
 export const name = 'dsh-plugin-zn-agent-client'
 
 /** 依赖的宿主服务：tools 注册工具，subagents 注册子代理提供方。 */
-export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions']
+export const inject = ['tools', 'subagents', 'subprocess', 'webServer', 'workingDirectory', 'sessions', 'workspaceRegistry']
 
 /** 插件配置（设置命名空间由 cordis.patch.yml 行 id 派生）。 */
 export interface Config {
