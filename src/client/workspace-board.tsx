@@ -1,5 +1,6 @@
 /**
- * 工作区看板：`main` 主区面板 + `sidebar.panellist` 侧栏图标。
+ * 工作区看板：`main` 主区面板；入口在侧栏工作区行的 …/右键菜单
+ * （contextMenus 的 workspace 目标贡献），按工作区打开，无独立侧栏图标。
  *
  * 只读展示（对话 tab + CLI 会话 tab），所有数据来自宿主官方运行时：
  * - 会话/工作区/状态：main 面板标准 props 的 useSessions / useSessionStatus /
@@ -15,8 +16,6 @@ import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } fro
 import type { Context } from '@deepseek-ai/cordis'
 // SlotMap 的 'main' 键由 layout 包声明合并；不引入则 register('main') 编译不过。
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
-// 'sidebar.panellist' 的 owner props 由 sidebar 包声明合并（入口也已引入，双保险）。
-import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import { LOCALE_NAMESPACE } from './constants.ts'
 import type { CliSessionEntry } from './agent-stream.ts'
 import { listSessions } from './agent-stream.ts'
@@ -95,21 +94,63 @@ interface ZnLayout {
   selectPanel(panelId: string | null): void
 }
 
+/** 宿主 contextMenus 服务面（结构化子集；MenuContribution 的 workspace 目标）。 */
+interface ZnContextMenus {
+  register(contribution: {
+    readonly id: string
+    readonly target: 'workspace'
+    readonly order: number
+    resolve(
+      target: { readonly workspaceId: string; readonly path: string; readonly displayTitle: string },
+      signal: AbortSignal,
+    ): readonly {
+      readonly id: string
+      readonly label: string
+      readonly separatorBefore?: boolean
+      run: () => void
+    }[]
+  }): () => void
+}
+
 /** registerWorkspaceBoard 捕获的服务（旧宿主缺失时为 null，动作降级禁用）。 */
 let uiWorkspace: ZnUiWorkspace | null = null
 let layout: ZnLayout | null = null
+let contextMenus: ZnContextMenus | null = null
+
+/** 看板聚焦状态：工作区菜单「打开看板」动作携带的工作区（seq 保证同值也能触发订阅）。 */
+let focusState: { readonly wsId: string; readonly seq: number } | null = null
+let focusSeq = 0
+const focusListeners = new Set<() => void>()
+
+/** 菜单动作调用：记录目标工作区并唤醒看板订阅者（selectPanel 之前调用，首帧即有值）。 */
+function setBoardFocus(wsId: string): void {
+  focusSeq += 1
+  focusState = { wsId, seq: focusSeq }
+  for (const notify of focusListeners) notify()
+}
+
+function subscribeBoardFocus(notify: () => void): () => void {
+  focusListeners.add(notify)
+  return () => focusListeners.delete(notify)
+}
+
+function getBoardFocus(): { readonly wsId: string; readonly seq: number } | null {
+  return focusState
+}
 
 /**
- * 注册看板：main 面板 + 侧栏图标（dsh-context/plugin-manager 同款两段式）。
+ * 注册看板：main 面板 + 工作区菜单「打开看板」动作（无独立侧栏图标——
+ * 入口在侧栏工作区行的 …/右键菜单里，豆包式按工作区打开）。
  * @param ctx - 客户端上下文。
  * @param controller - 配置表单控制器（inject 面带 useTemplateConfig 舱位）。
  */
 export function registerWorkspaceBoard(ctx: Context, controller: { inject(): TemplateFace }): void {
-  // 声明依赖宿主的 uiWorkspace / layout 服务（授权 API：开/建/归档会话、切主区面板）。
-  ctx.inject(['uiWorkspace', 'layout'], (scope: Context) => {
+  // 声明依赖宿主的 uiWorkspace / layout / contextMenus 服务（授权 API：开/建/归档会话、切主区面板、菜单贡献）。
+  ctx.inject(['uiWorkspace', 'layout', 'contextMenus'], (scope: Context) => {
     const raw = scope as unknown as { get?(key: string): unknown }
     uiWorkspace = (raw.get?.('uiWorkspace') ?? null) as ZnUiWorkspace | null
     layout = (raw.get?.('layout') ?? null) as ZnLayout | null
+    contextMenus = (raw.get?.('contextMenus') ?? null) as ZnContextMenus | null
   })
   const tBind = ctx.locale.bind(LOCALE_NAMESPACE)
   // main 面板的 register 选项没有 inject 舱位 → 配置 hooks 舱位在注册时直接
@@ -125,25 +166,24 @@ export function registerWorkspaceBoard(ctx: Context, controller: { inject(): Tem
       templateConfig={face.hooks.templateConfig}
     />
   )))
-  ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-    name: 'sidebar.panellist',
-    id: BOARD_PANEL_ID,
-    order: 30,
-    label: () => tBind('board.label'),
-    locale: LOCALE_NAMESPACE,
-  }, BoardIcon))
-}
-
-/** 侧栏图标：三列看板字形（owner 传 size/active）。 */
-function BoardIcon(props: { readonly size?: number }): React.ReactElement {
-  const size = typeof props.size === 'number' ? props.size : 16
-  return (
-    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden="true">
-      <rect x="2" y="2.5" width="3.4" height="7.5" rx="1.1" fill="currentColor" />
-      <rect x="6.8" y="2.5" width="3.4" height="11" rx="1.1" fill="currentColor" />
-      <rect x="11.6" y="2.5" width="3.4" height="5.5" rx="1.1" fill="currentColor" />
-    </svg>
-  )
+  // 工作区菜单贡献：卸载时注销（宿主约定：unload 撤回动作并中断查询）。
+  if (contextMenus !== null) {
+    const unregister = contextMenus.register({
+      id: 'znacp.open-board',
+      target: 'workspace',
+      order: 900,
+      resolve: (target) => [{
+        id: 'znacp.open-board',
+        label: tBind('board.menuOpen'),
+        separatorBefore: true,
+        run: () => {
+          setBoardFocus(target.workspaceId)
+          layout?.selectPanel(BOARD_PANEL_ID)
+        },
+      }],
+    })
+    ctx.effect(() => unregister)
+  }
 }
 
 /** 行状态：等待你 > 运行中 > 已完成 > 空闲（dsh-board 同款判定顺序）。 */
@@ -197,6 +237,12 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
   const [query, setQuery] = useState('')
   const [toast, setToast] = useState('')
   const toastTimer = useRef<number>(0)
+
+  // 工作区菜单「打开看板」→ 聚焦该工作区（seq 变化即触发，同值重复点击也生效）。
+  const focus = useSyncExternalStore(subscribeBoardFocus, getBoardFocus)
+  useEffect(() => {
+    if (focus !== null) setSelectedWsId(focus.wsId)
+  }, [focus])
 
   const showToast = (message: string): void => {
     setToast(message)

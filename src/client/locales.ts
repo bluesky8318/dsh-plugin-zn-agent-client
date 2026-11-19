@@ -41,7 +41,7 @@ export type ZnAgentClientLocaleKey =
   | 'view.switchedTo' | 'view.newCreated'
   | 'view.externalOpen' | 'view.externalOpening' | 'view.externalOpened' | 'view.externalFailed'
   // 工作区看板
-  | 'board.label' | 'board.title' | 'board.newChat' | 'board.searchHint'
+  | 'board.title' | 'board.menuOpen' | 'board.newChat' | 'board.searchHint'
   | 'board.tabChat' | 'board.tabCli' | 'board.tabArtifacts' | 'board.tabConfig'
   | 'board.sessionUnit' | 'board.runningUnit'
   | 'board.noWorkspaces' | 'board.noSessions' | 'board.cliLoading' | 'board.noCliSessions'
@@ -124,8 +124,8 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalOpening': 'Opening…',
   'view.externalOpened': 'Opened',
   'view.externalFailed': 'Open failed',
-  'board.label': 'CLIAgents',
   'board.title': 'CLIAgents',
+  'board.menuOpen': 'Open CLIAgents board',
   'board.newChat': 'New session',
   'board.searchHint': 'Search sessions',
   'board.tabChat': 'Sessions',
@@ -225,8 +225,8 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'view.externalOpening': '正在打开…',
   'view.externalOpened': '已打开',
   'view.externalFailed': '打开失败',
-  'board.label': 'CLIAgents',
   'board.title': 'CLIAgents',
+  'board.menuOpen': '打开 CLIAgents 看板',
   'board.newChat': '新会话',
   'board.searchHint': '搜索会话',
   'board.tabChat': '对话',
