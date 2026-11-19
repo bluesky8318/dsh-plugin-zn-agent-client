@@ -51,7 +51,7 @@ export type ZnAgentClientLocaleKey =
   | 'board.filterAll' | 'board.filterStatus' | 'board.sortLabel' | 'board.sortUpdated' | 'board.sortTitle'
   | 'board.sortAsc' | 'board.sortDesc' | 'board.agentSelect'
   | 'board.colSummary' | 'board.colUpdated'
-  | 'board.detailHint' | 'board.detailFailed'
+  | 'board.detailHint' | 'board.detailFailed' | 'board.openChat'
   | 'board.copyResume' | 'board.copyOk' | 'board.copyFailed'
   | 'board.previewUnsupported' | 'board.previewEmpty' | 'board.roleUser' | 'board.roleAssistant'
   | 'board.configMissing' | 'board.configSave' | 'board.configSaved' | 'board.configSaveFailed' | 'board.configLoadFailed'
@@ -159,6 +159,7 @@ export const en: Record<ZnAgentClientLocaleKey, string> = {
   'board.colUpdated': 'Updated',
   'board.detailHint': 'Pick a session to preview',
   'board.detailFailed': 'Failed to load the session',
+  'board.openChat': 'Open',
   'board.copyResume': 'Copy resume command',
   'board.copyOk': 'Resume command copied',
   'board.copyFailed': 'Copy failed',
@@ -282,6 +283,7 @@ export const zh: Record<ZnAgentClientLocaleKey, string> = {
   'board.colUpdated': '更新时间',
   'board.detailHint': '选择一个会话查看内容',
   'board.detailFailed': '会话内容加载失败',
+  'board.openChat': '打开',
   'board.copyResume': '复制恢复命令',
   'board.copyOk': '恢复命令已复制',
   'board.copyFailed': '复制失败',

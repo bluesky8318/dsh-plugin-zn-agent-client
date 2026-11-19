@@ -795,10 +795,14 @@ html:has([data-znacp-cli-view]) [data-side='right'] {
 .znb-row-act { flex: none; padding: 3px 10px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-secondary); background: transparent; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 5px; cursor: pointer; opacity: 0; }
 .znb-row:hover .znb-row-act { opacity: 1; }
 .znb-row-act:hover { color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); }
+.znb-open { flex: none; padding: 3px 10px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--dsw-alias-state-business-primary); background: transparent; border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 5px; cursor: pointer; }
+.znb-open:hover { background: var(--dsw-alias-interactive-bg-hover); }
+.znb-row-on { background: var(--dsw-alias-bg-layer-2); }
+.znb-row-on:hover { background: var(--dsw-alias-bg-layer-2); }
 .znb-toast { position: fixed; right: 18px; bottom: 18px; padding: 8px 14px; font-size: 13px; line-height: 20px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-2); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 8px; }
 
 /* 看板 v2：筛选行 / CLI 表格 / 详情 / 配置编辑 / 占位 */
-.znb-listwrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.znb-listwrap { display: flex; flex-direction: column; width: 46%; flex: none; min-height: 0; overflow: hidden; border-right: 0.5px solid var(--dsw-alias-border-l1); }
 .znb-filters { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 0.5px solid var(--dsw-alias-border-l1); }
 .znb-select { padding: 4px 8px; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-layer-1); border: 0.5px solid var(--dsw-alias-border-l1); border-radius: 6px; }
 .znb-cliwrap { display: flex; flex-direction: column; flex: 1; min-height: 0; }

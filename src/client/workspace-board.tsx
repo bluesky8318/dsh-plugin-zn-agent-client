@@ -335,6 +335,37 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
   const wsId = ws?.workspaceId ?? ''
   const activeCliAgent = agents.find((agent: AgentEntry) => agent.id === cliAgentId) ?? agents[0] ?? null
 
+  // ── DSH 会话预览（点击行 → 右侧内容预览；跳转走行尾显式按钮）────
+  const [chatDetailId, setChatDetailId] = useState<string>('')
+  const [chatDetail, setChatDetail] = useState<{ supported: boolean; messages: Array<{ role: 'user' | 'assistant'; text: string }>; truncated: boolean } | null>(null)
+  const [chatDetailLoading, setChatDetailLoading] = useState(false)
+
+  // 切换工作区后预览失效（会话属于上一个工作区）。
+  useEffect(() => {
+    setChatDetailId('')
+    setChatDetail(null)
+  }, [wsId])
+
+  useEffect(() => {
+    if (chatDetailId === '') return
+    let alive = true
+    setChatDetailLoading(true)
+    setChatDetail(null)
+    void postBoard<{ supported: boolean; messages: Array<{ role: 'user' | 'assistant'; text: string }>; truncated: boolean }>(
+      '/api/zn-agent-client/dsh-session-detail',
+      { sessionId: chatDetailId },
+    ).then((data) => {
+      if (!alive) return
+      setChatDetail(data)
+      setChatDetailLoading(false)
+    }).catch(() => {
+      if (!alive) return
+      setChatDetailLoading(false)
+      showToast(t('board.detailFailed'))
+    })
+    return () => { alive = false }
+  }, [chatDetailId, t])
+
   useEffect(() => {
     if (tab !== 'cli' || wsPath === '' || activeCliAgent === null) return
     let alive = true
@@ -435,11 +466,10 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
     })
   }
 
-  /** 打开一个 DSH 会话并切回主会话区。 */
+  /** 打开一个 DSH 会话：openSession 内部已切回会话区（selectPanel(null)），不要额外 selectPanel。 */
   const openChatSession = (sessionId: string): void => {
     try {
       uiWorkspace?.openSession(sessionId)
-      layout?.selectPanel('conversation')
     } catch {
       showToast(t('board.openFailed'))
     }
@@ -469,38 +499,76 @@ export function WorkspaceBoardPage(props: BoardPageProps): React.ReactElement {
       </div>
       <section className="znb-main">
         {tab === 'dsh' && (
-          <div className="znb-listwrap">
-            <div className="znb-filters">
-              <input className="znb-search" type="text" value={query} placeholder={t('board.searchHint')} onChange={(event) => { setQuery(event.target.value) }} />
-              <select className="znb-select" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter) }} aria-label={t('board.filterStatus')}>
-                <option value="all">{t('board.filterAll')}</option>
-                <option value="running">{t('board.stRunning')}</option>
-                <option value="confirm">{t('board.stWaiting')}</option>
-                <option value="done">{t('board.stDone')}</option>
-                <option value="idle">{t('board.stIdle')}</option>
-              </select>
-              <select className="znb-select" value={sortKey} onChange={(event) => { setSortKey(event.target.value as typeof sortKey) }} aria-label={t('board.sortLabel')}>
-                <option value="updated">{t('board.sortUpdated')}</option>
-                <option value="title">{t('board.sortTitle')}</option>
-              </select>
-            </div>
-            <div className="znb-list">
-              {filteredRows.length === 0 && <p className="znb-empty">{t('board.noSessions')}</p>}
-              {filteredRows.map((row) => (
-                <div key={row.id} className="znb-row" onClick={() => { openChatSession(row.id) }}>
-                  <span className={`znb-dot znb-dot-${row.status}`} title={t(STATUS_KEYS[row.status])} />
-                  <span className="znb-row-title">{row.title}</span>
-                  {row.archived && <span className="znb-badge">{t('board.archived')}</span>}
-                  <span className="znb-row-time">{formatTime(row.updatedAt)}</span>
-                  <button
-                    type="button"
-                    className="znb-row-act"
-                    onClick={(event) => { event.stopPropagation(); archiveSession(row.id) }}
+          <div className="znb-clisplit">
+            <div className="znb-listwrap">
+              <div className="znb-filters">
+                <input className="znb-search" type="text" value={query} placeholder={t('board.searchHint')} onChange={(event) => { setQuery(event.target.value) }} />
+                <select className="znb-select" value={statusFilter} onChange={(event) => { setStatusFilter(event.target.value as typeof statusFilter) }} aria-label={t('board.filterStatus')}>
+                  <option value="all">{t('board.filterAll')}</option>
+                  <option value="running">{t('board.stRunning')}</option>
+                  <option value="confirm">{t('board.stWaiting')}</option>
+                  <option value="done">{t('board.stDone')}</option>
+                  <option value="idle">{t('board.stIdle')}</option>
+                </select>
+                <select className="znb-select" value={sortKey} onChange={(event) => { setSortKey(event.target.value as typeof sortKey) }} aria-label={t('board.sortLabel')}>
+                  <option value="updated">{t('board.sortUpdated')}</option>
+                  <option value="title">{t('board.sortTitle')}</option>
+                </select>
+              </div>
+              <div className="znb-list">
+                {filteredRows.length === 0 && <p className="znb-empty">{t('board.noSessions')}</p>}
+                {filteredRows.map((row) => (
+                  <div
+                    key={row.id}
+                    className={row.id === chatDetailId ? 'znb-row znb-row-on' : 'znb-row'}
+                    onClick={() => { setChatDetailId(row.id) }}
                   >
-                    {t('board.archive')}
-                  </button>
-                </div>
-              ))}
+                    <span className={`znb-dot znb-dot-${row.status}`} title={t(STATUS_KEYS[row.status])} />
+                    <span className="znb-row-title">{row.title}</span>
+                    {row.archived && <span className="znb-badge">{t('board.archived')}</span>}
+                    <span className="znb-row-time">{formatTime(row.updatedAt)}</span>
+                    <button
+                      type="button"
+                      className="znb-open"
+                      title={t('board.openChat')}
+                      onClick={(event) => { event.stopPropagation(); openChatSession(row.id) }}
+                    >
+                      {t('board.openChat')}
+                    </button>
+                    <button
+                      type="button"
+                      className="znb-row-act"
+                      onClick={(event) => { event.stopPropagation(); archiveSession(row.id) }}
+                    >
+                      {t('board.archive')}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="znb-clidetail">
+              {chatDetailId === '' && <p className="znb-empty">{t('board.detailHint')}</p>}
+              {chatDetailId !== '' && chatDetailLoading && <p className="znb-empty">{t('board.cliLoading')}</p>}
+              {chatDetailId !== '' && !chatDetailLoading && chatDetail !== null && (
+                <>
+                  <div className="znb-detail-bar">
+                    <span className="znb-detail-id">{chatDetailId.slice(0, 8)}</span>
+                    <span className="znb-detail-count">{chatDetail.messages.length}{chatDetail.truncated ? '+' : ''}</span>
+                    <button type="button" className="znb-copybtn" onClick={() => { openChatSession(chatDetailId) }}>
+                      {t('board.openChat')}
+                    </button>
+                  </div>
+                  {chatDetail.messages.length === 0 && <p className="znb-empty">{t('board.previewEmpty')}</p>}
+                  <div className="znb-msgs">
+                    {chatDetail.messages.map((message, index) => (
+                      <div key={`${chatDetailId}:${index}`} className={`znb-msg znb-msg-${message.role}`}>
+                        <span className="znb-msg-role">{message.role === 'user' ? t('board.roleUser') : t('board.roleAssistant')}</span>
+                        <p className="znb-msg-text">{message.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}

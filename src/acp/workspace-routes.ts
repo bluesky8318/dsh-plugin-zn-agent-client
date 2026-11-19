@@ -14,6 +14,7 @@ import { fail, guarded, json, ok, readJsonBody, type RouteRequest, type RouteRes
 import { buildLaunchPlan } from './cli-sessions.ts'
 import type { AgentConfig } from '../types/index.ts'
 import { parseTranscript } from './cli-transcript.ts'
+import { parseDshTranscript } from './dsh-transcript.ts'
 
 /** createWorkspaceRoutes 的依赖面。 */
 export interface WorkspaceRouteDeps {
@@ -26,9 +27,10 @@ export interface WorkspaceRouteDeps {
 const MAX_AGENTS_MD_BYTES = 512 * 1024
 
 /**
- * 看板路由（两条，均 POST）：
+ * 看板路由（三条，均 POST）：
  * - POST /api/zn-agent-client/workspace-config  {op:'read'|'write', workspaceId, content?}
  * - POST /api/zn-agent-client/cli-session-detail {agentId, resumeTarget, cwd?}
+ * - POST /api/zn-agent-client/dsh-session-detail {sessionId}（DSH 会话只读预览）
  */
 export function createWorkspaceRoutes(deps: WorkspaceRouteDeps): Array<{
   path: string
@@ -85,6 +87,24 @@ export function createWorkspaceRoutes(deps: WorkspaceRouteDeps): Array<{
         // 恢复命令独立于预览：即使 transcript 不支持，命令照样能给出。
         const resumeCommand = buildLaunchPlan(agent, 'resume', resumeTarget).launchLine
         json(res, 200, ok({ ...transcript, resumeCommand }))
+      },
+    },
+    {
+      path: '/api/zn-agent-client/dsh-session-detail',
+      method: 'POST',
+      handler: async (req: RouteRequest, res: RouteResponse): Promise<void> => {
+        if (!guarded(req)) return void fail(res, 403, 'missing plugin header')
+        const body = await readJsonBody(req)
+        if (body === null) return void fail(res, 400, 'invalid body')
+        const sessionId = typeof body.sessionId === 'string' ? body.sessionId.trim() : ''
+        if (sessionId === '') return void fail(res, 400, '缺少 sessionId')
+        try {
+          // 只读：解压读取会话日志并过滤出人可读消息；绝不写会话文件。
+          const transcript = parseDshTranscript(sessionId)
+          json(res, 200, ok({ supported: transcript.supported, messages: transcript.messages, truncated: transcript.truncated }))
+        } catch (error) {
+          fail(res, 404, error instanceof Error ? error.message : String(error))
+        }
       },
     },
   ]
